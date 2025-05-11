@@ -27,6 +27,9 @@
   "license": "MIT",
   "dependencies": {
     "@fastify/cors": "^8.0.0",
+    "@octokit/auth-app": "^7.2.1",
+    "@octokit/rest": "^21.1.1",
+    "@octokit/webhooks": "^13.8.2",
     "dockerode": "^4.0.0",
     "dotenv": "^16.0.0",
     "fastify": "^4.0.0",
