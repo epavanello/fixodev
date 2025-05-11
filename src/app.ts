@@ -17,19 +17,27 @@ import { registerWebhookRoutes } from './github/webhooks';
 import { jobQueue } from './queue';
 import { loadQueueFromDisk, saveQueueToDisk } from './queue/persistence';
 
-const app = fastify({
-  logger,
-});
+function createApp() {
+  const app = fastify({
+    logger,
+  });
 
-// Register plugins
-app.register(cors, {
-  origin: true, // Allow all origins in development
-});
+  // Register plugins
+  app.register(cors, {
+    origin: true, // Allow all origins in development
+  });
 
-// Register routes
-app.get('/health', async () => {
-  return { status: 'ok' };
-});
+  // Register routes
+  app.get('/health', async () => {
+    return { status: 'ok' };
+  });
+
+  return app;
+}
+
+export type App = ReturnType<typeof createApp>;
+
+const app = createApp();
 
 // Register webhook routes
 registerWebhookRoutes(app);

@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { envConfig } from '../../config/env';
 import { logger } from '../../config/logger';
+import { App } from '@/app';
 
 interface WebhookPayload {
   action?: string;
@@ -13,7 +14,7 @@ interface WebhookPayload {
   };
 }
 
-export const registerWebhookRoutes = (app: FastifyInstance) => {
+export const registerWebhookRoutes = (app: App) => {
   // GitHub webhook endpoint
   app.post('/api/webhooks/github', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
