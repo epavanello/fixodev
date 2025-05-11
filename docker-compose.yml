@@ -1,0 +1,26 @@
+version: "3"
+
+services:
+  app:
+    build: .
+    restart: always
+    env_file: .env
+    environment:
+    - NODE_ENV=production
+    - PORT=3000
+    ports:
+    - "3000:3000"
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - repos:/app/repos
+    - queue-data:/app/data
+    networks:
+    - ghbot-network
+
+networks:
+  ghbot-network:
+    driver: bridge
+
+volumes:
+  repos:
+  queue-data:
