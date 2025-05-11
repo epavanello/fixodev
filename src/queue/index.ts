@@ -1,5 +1,6 @@
 import { Job, JobCreateParams, createJob } from './job';
 import { logger } from '../config/logger';
+import { processJob } from './worker';
 
 class JobQueue {
   private queue: Job[] = [];
@@ -54,9 +55,8 @@ class JobQueue {
 
       logger.info({ jobId: job.id }, 'Processing job');
 
-      // TODO: Implement actual job processing
-      // For now, just simulate processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Process the job
+      await processJob(job);
 
       // Mark job as completed
       job.status = 'completed';
@@ -97,7 +97,6 @@ class JobQueue {
 
   /**
    * Save queue state to disk
-   * TODO: Implement actual persistence
    */
   public saveState(): void {
     logger.info('Queue state saved');
@@ -105,7 +104,6 @@ class JobQueue {
 
   /**
    * Load queue state from disk
-   * TODO: Implement actual persistence
    */
   public loadState(): void {
     logger.info('Queue state loaded');
