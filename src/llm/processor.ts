@@ -2,9 +2,16 @@ import { OpenAI } from 'openai';
 import { envConfig } from '../config/env';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
-import { generateFixPrompt, generateLintFixPrompt, generateTestFixPrompt } from './prompts/fix';
+import { Agent } from './agent';
+import {
+  createReadFileTool,
+  createWriteFileTool,
+  createListDirectoryTool,
+  createFileExistsTool,
+} from './tools/file';
+import { createGrepTool, createFindFilesTool, createFindSymbolsTool } from './tools/search';
+import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
-import { generateRepositoryAnalysisPrompt } from './prompts/analyze';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -33,6 +40,35 @@ interface RepositoryAnalysis {
 }
 
 /**
+ * Create and configure an Agent for a repository
+ */
+const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => {
+  // Create the agent
+  const agent = new Agent({
+    basePath: repositoryPath,
+    model: 'gpt-4o',
+    systemMessage: generateCodeAssistantSystemPrompt({
+      taskType: 'feature',
+      languages: [context.language || 'unknown'],
+    }),
+    verbose: true,
+  });
+
+  // Register file system tools
+  agent.registerTool(createReadFileTool(repositoryPath));
+  agent.registerTool(createWriteFileTool(repositoryPath));
+  agent.registerTool(createListDirectoryTool(repositoryPath));
+  agent.registerTool(createFileExistsTool(repositoryPath));
+
+  // Register search tools
+  agent.registerTool(createGrepTool(repositoryPath));
+  agent.registerTool(createFindFilesTool(repositoryPath));
+  agent.registerTool(createFindSymbolsTool(repositoryPath));
+
+  return agent;
+};
+
+/**
  * Analyze code using LLM
  */
 export const analyzeCode = async (
@@ -42,27 +78,52 @@ export const analyzeCode = async (
   try {
     logger.info({ command: context.command }, 'Analyzing repository for changes');
 
-    const prompt = generateRepositoryAnalysisPrompt(codeOrPath, context);
+    if (!context.repositoryPath) {
+      throw new Error('Repository path is required for analysis');
+    }
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a professional developer. Analyze the repository and suggest changes based on the command.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.2,
-    });
+    // Create repository agent
+    const agent = createRepositoryAgent(context.repositoryPath, context);
 
-    const result = JSON.parse(
-      response.choices[0].message.content || '{"changes": []}',
-    ) as RepositoryAnalysis;
+    // Run the agent with the command
+    const response = await agent.run(`
+      I need you to analyze this repository and suggest changes based on the following request:
+      "${context.command}"
+      
+      First, explore the repository structure to understand what we're working with.
+      Then, identify the files that need to be modified to implement the requested changes.
+      
+      Return your analysis in JSON format with the following structure:
+      {
+        "changes": [
+          {
+            "filePath": "path/to/file",
+            "description": "What changes are needed",
+            "dependencies": ["dependency1", "dependency2"] // optional
+          }
+        ]
+      }
+    `);
+
+    // Parse the response to extract the changes
+    const jsonMatch =
+      response.match(/```json\n([\s\S]*?)\n```/) ||
+      response.match(/```\n([\s\S]*?)\n```/) ||
+      response.match(/\{[\s\S]*"changes"[\s\S]*\}/);
+
+    let result: RepositoryAnalysis;
+
+    if (jsonMatch) {
+      try {
+        result = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+      } catch (error) {
+        logger.error({ response, error }, 'Failed to parse JSON from response');
+        result = { changes: [] };
+      }
+    } else {
+      logger.warn({ response }, 'Could not extract JSON from response');
+      result = { changes: [] };
+    }
 
     logger.info({ command: context.command }, 'Repository analysis completed');
 
@@ -86,28 +147,72 @@ export const fixCode = async (
   try {
     logger.info({ filePath: context.filePath }, 'Fixing code');
 
-    const prompt = generateFixPrompt(code, issue, context);
+    if (!context.repositoryPath) {
+      // Legacy approach without agent
+      const prompt = `Fix the following issue in the code:
+${issue}
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional developer. Provide only the corrected code.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.2,
-    });
+File: ${context.filePath || 'unknown'}
+Language: ${context.language || 'unknown'}
+Dependencies: ${context.dependencies?.join(', ') || 'none'}
 
-    const fixedCode = response.choices[0].message.content || '';
+Code:
+\`\`\`
+${code}
+\`\`\`
 
-    logger.info({ filePath: context.filePath }, 'Code fix completed');
+Please provide only the corrected code with no explanations. The code should be complete and ready to use.`;
 
-    return fixedCode;
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional developer. Provide only the corrected code.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.2,
+      });
+
+      const fixedCode = response.choices[0].message.content || '';
+      logger.info({ filePath: context.filePath }, 'Code fix completed');
+      return fixedCode;
+    }
+
+    // Create repository agent
+    const agent = createRepositoryAgent(context.repositoryPath, context);
+
+    // Run the agent with the issue and code
+    const response = await agent.run(`
+      I need you to fix an issue in the following code:
+      
+      File: ${context.filePath || 'unknown'}
+      Issue: ${issue}
+      
+      Here is the current code:
+      \`\`\`
+      ${code}
+      \`\`\`
+      
+      Please analyze the issue and provide only the corrected code with no explanations.
+      The code should be complete and ready to use.
+    `);
+
+    // Extract the code from the response
+    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)\n```/);
+
+    if (codeMatch) {
+      logger.info({ filePath: context.filePath }, 'Code fix completed');
+      return codeMatch[1];
+    } else {
+      // If no code block found, use the response as is
+      logger.info({ filePath: context.filePath }, 'Code fix completed (no code block found)');
+      return response;
+    }
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix code');
     throw new GitHubError(
@@ -127,28 +232,74 @@ export const fixLinting = async (
   try {
     logger.info({ filePath: context.filePath }, 'Fixing linting issues');
 
-    const prompt = generateLintFixPrompt(code, lintErrors, context);
+    if (!context.repositoryPath) {
+      // Legacy approach without agent
+      const prompt = `Fix the following linting issues in the code:
+${lintErrors.join('\n')}
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional developer. Provide only the corrected code.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.2,
-    });
+File: ${context.filePath || 'unknown'}
+Language: ${context.language || 'unknown'}
+Linter: ${context.linter || 'unknown'}
 
-    const fixedCode = response.choices[0].message.content || '';
+Code:
+\`\`\`
+${code}
+\`\`\`
 
-    logger.info({ filePath: context.filePath }, 'Linting fix completed');
+Please provide only the corrected code with no explanations.`;
 
-    return fixedCode;
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional developer. Provide only the corrected code.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.2,
+      });
+
+      const fixedCode = response.choices[0].message.content || '';
+      logger.info({ filePath: context.filePath }, 'Linting fix completed');
+      return fixedCode;
+    }
+
+    // Create repository agent
+    const agent = createRepositoryAgent(context.repositoryPath, context);
+
+    // Run the agent with the lint errors and code
+    const response = await agent.run(`
+      I need you to fix the following linting issues in the code:
+      
+      File: ${context.filePath || 'unknown'}
+      Linter: ${context.linter || 'unknown'}
+      Issues:
+      ${lintErrors.join('\n')}
+      
+      Here is the current code:
+      \`\`\`
+      ${code}
+      \`\`\`
+      
+      Please analyze the issues and provide only the corrected code with no explanations.
+      The code should be complete and ready to use.
+    `);
+
+    // Extract the code from the response
+    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)\n```/);
+
+    if (codeMatch) {
+      logger.info({ filePath: context.filePath }, 'Linting fix completed');
+      return codeMatch[1];
+    } else {
+      // If no code block found, use the response as is
+      logger.info({ filePath: context.filePath }, 'Linting fix completed (no code block found)');
+      return response;
+    }
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix linting issues');
     throw new GitHubError(
@@ -168,28 +319,74 @@ export const fixTests = async (
   try {
     logger.info({ filePath: context.filePath }, 'Fixing test failures');
 
-    const prompt = generateTestFixPrompt(code, testOutput, context);
+    if (!context.repositoryPath) {
+      // Legacy approach without agent
+      const prompt = `Fix the following test failures:
+${testOutput}
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional developer. Provide only the corrected code.',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.2,
-    });
+File: ${context.filePath || 'unknown'}
+Language: ${context.language || 'unknown'}
+Test Framework: ${context.testFramework || 'unknown'}
 
-    const fixedCode = response.choices[0].message.content || '';
+Code:
+\`\`\`
+${code}
+\`\`\`
 
-    logger.info({ filePath: context.filePath }, 'Test fix completed');
+Please provide only the corrected code with no explanations.`;
 
-    return fixedCode;
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional developer. Provide only the corrected code.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.2,
+      });
+
+      const fixedCode = response.choices[0].message.content || '';
+      logger.info({ filePath: context.filePath }, 'Test fix completed');
+      return fixedCode;
+    }
+
+    // Create repository agent
+    const agent = createRepositoryAgent(context.repositoryPath, context);
+
+    // Run the agent with the test failures and code
+    const response = await agent.run(`
+      I need you to fix the following test failures:
+      
+      File: ${context.filePath || 'unknown'}
+      Test Framework: ${context.testFramework || 'unknown'}
+      Test Output:
+      ${testOutput}
+      
+      Here is the current code:
+      \`\`\`
+      ${code}
+      \`\`\`
+      
+      Please analyze the test failures and provide only the corrected code with no explanations.
+      The code should be complete and ready to use.
+    `);
+
+    // Extract the code from the response
+    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)\n```/);
+
+    if (codeMatch) {
+      logger.info({ filePath: context.filePath }, 'Test fix completed');
+      return codeMatch[1];
+    } else {
+      // If no code block found, use the response as is
+      logger.info({ filePath: context.filePath }, 'Test fix completed (no code block found)');
+      return response;
+    }
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix test failures');
     throw new GitHubError(

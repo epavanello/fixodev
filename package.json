@@ -39,7 +39,9 @@
     "openai": "^4.0.0",
     "pino": "^8.0.0",
     "simple-git": "^3.0.0",
-    "yaml": "^2.0.0"
+    "yaml": "^2.0.0",
+    "zod": "^3.24.4",
+    "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
     "@types/bun": "^1.2.13",

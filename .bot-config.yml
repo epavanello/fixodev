@@ -1,0 +1,6 @@
+runtime: bun:latest
+scripts:
+  lint: bun run lint
+  format: bun run format
+branches:
+  target: main
