@@ -1,3 +1,5 @@
+import { CodeContext } from '../processor';
+
 /**
  * Generate a prompt for fixing code issues
  */
@@ -37,11 +39,7 @@ Please provide only the corrected code with no explanations. The code should be 
 export const generateLintFixPrompt = (
   code: string,
   lintErrors: string[],
-  context?: {
-    filePath?: string;
-    language?: string;
-    linter?: string;
-  },
+  context: CodeContext,
 ): string => {
   const contextInfo = context
     ? `
@@ -70,11 +68,7 @@ Please provide only the corrected code with no explanations. The code should be 
 export const generateTestFixPrompt = (
   code: string,
   testOutput: string,
-  context?: {
-    filePath?: string;
-    language?: string;
-    testFramework?: string;
-  },
+  context: CodeContext,
 ): string => {
   const contextInfo = context
     ? `

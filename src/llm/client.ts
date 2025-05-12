@@ -8,7 +8,7 @@ const openai = new OpenAI({
 });
 
 /**
- * Generate a completion with GPT-4
+ * Generate a completion
  */
 export const generateCompletion = async (
   prompt: string,

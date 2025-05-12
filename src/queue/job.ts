@@ -1,11 +1,13 @@
+import { GitHubEvent, GitHubEventType } from '../types/github';
+
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface Job {
   id: string;
   repositoryUrl: string;
   installationId: number;
-  eventType: string;
-  payload: any;
+  eventType: GitHubEventType;
+  payload: GitHubEvent;
   status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -16,8 +18,8 @@ export interface Job {
 export interface JobCreateParams {
   repositoryUrl: string;
   installationId: number;
-  eventType: string;
-  payload: any;
+  eventType: GitHubEventType;
+  payload: GitHubEvent;
 }
 
 export const createJob = (params: JobCreateParams): Job => {

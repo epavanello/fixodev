@@ -9,10 +9,7 @@ const docker = new Dockerode();
 const RUNTIME_PREFIX = envConfig.DOCKER_RUNTIME_PREFIX;
 
 // Available runtime images
-export enum Runtime {
-  NODE_18 = 'node:18',
-  NODE_20 = 'node:20',
-}
+export type Runtime = 'node' | 'python' | 'ruby' | 'php' | 'go' | 'rust' | 'java' | 'dotnet';
 
 /**
  * Get Docker image name for runtime

@@ -3,7 +3,8 @@ import { envConfig } from '../config/env';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { generateFixPrompt, generateLintFixPrompt, generateTestFixPrompt } from './prompts/fix';
-import { generateQualityAnalysisPrompt, generateRepositoryAnalysisPrompt } from './prompts/analyze';
+import { BotConfig } from '../types/config';
+import { generateRepositoryAnalysisPrompt } from './prompts/analyze';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -14,8 +15,8 @@ export interface CodeContext {
   filePath?: string;
   language?: string;
   dependencies?: string[];
-  linter?: string;
-  testFramework?: string;
+  linter?: BotConfig['linter'];
+  testFramework?: BotConfig['testFramework'];
   projectType?: string;
   command?: string;
   repositoryPath?: string;
@@ -44,7 +45,7 @@ export const analyzeCode = async (
     const prompt = generateRepositoryAnalysisPrompt(codeOrPath, context);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -88,7 +89,7 @@ export const fixCode = async (
     const prompt = generateFixPrompt(code, issue, context);
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',

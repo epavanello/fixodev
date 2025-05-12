@@ -1,72 +1,41 @@
 import { readFile } from 'fs/promises';
-import { existsSync } from 'fs';
 import { join } from 'path';
-import { load } from 'js-yaml';
-import { logger } from '../config/logger';
+import { parse } from 'yaml';
+import { BotConfig } from '../types/config';
+import { Runtime } from '../docker';
 
-/**
- * Bot configuration structure
- */
-export interface BotConfig {
-  runtime: string;
-  scripts: {
-    lint?: string;
-    test?: string;
-    format?: string;
-    [key: string]: string | undefined;
-  };
-  autofix: boolean;
-  branches: {
-    autofix: boolean;
-    target: string;
-  };
-}
+const CONFIG_FILE = '.github/bot.yml';
 
-/**
- * Default bot configuration
- */
-export const defaultBotConfig: BotConfig = {
-  runtime: 'node:20',
-  scripts: {},
-  autofix: true,
-  branches: {
-    autofix: true,
-    target: 'main',
-  },
-};
-
-/**
- * Parse and load bot configuration from a repository
- */
 export const loadBotConfig = async (repoPath: string): Promise<BotConfig> => {
   try {
-    const configPath = join(repoPath, '.bot-config.yml');
+    const configPath = join(repoPath, CONFIG_FILE);
+    const configContent = await readFile(configPath, 'utf8');
+    const config = parse(configContent) as Partial<BotConfig>;
 
-    // Check if config file exists
-    if (!existsSync(configPath)) {
-      logger.info('No bot configuration found, using defaults');
-      return defaultBotConfig;
-    }
-
-    // Read and parse YAML file
-    const configFile = await readFile(configPath, 'utf8');
-    const config = load(configFile) as Partial<BotConfig>;
-
-    // Merge with defaults
+    // Validate and set defaults
     return {
-      ...defaultBotConfig,
-      ...config,
-      scripts: {
-        ...defaultBotConfig.scripts,
-        ...(config.scripts || {}),
-      },
+      runtime: (config.runtime || 'node') as Runtime,
       branches: {
-        ...defaultBotConfig.branches,
-        ...(config.branches || {}),
+        target: config.branches?.target || 'main',
       },
+      scripts: {
+        lint: config.scripts?.lint,
+        test: config.scripts?.test,
+        format: config.scripts?.format,
+      },
+      linter: config.linter,
+      testFramework: config.testFramework,
+      projectType: config.projectType,
+      dependencies: config.dependencies,
     };
   } catch (error) {
-    logger.error(error, 'Failed to load bot configuration');
-    return defaultBotConfig;
+    // Return default config if file doesn't exist
+    return {
+      runtime: 'node',
+      branches: {
+        target: 'main',
+      },
+      scripts: {},
+    };
   }
 };
