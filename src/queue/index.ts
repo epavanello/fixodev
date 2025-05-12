@@ -1,6 +1,7 @@
 import { Job, JobCreateParams, createJob } from './job';
 import { logger } from '../config/logger';
 import { processJob } from './worker';
+import { loadQueueFromDisk } from './persistence';
 
 class JobQueue {
   private queue: Job[] = [];
@@ -105,8 +106,10 @@ class JobQueue {
   /**
    * Load queue state from disk
    */
-  public loadState(): void {
+  public async loadState(): Promise<void> {
     logger.info('Queue state loaded');
+    this.queue = await loadQueueFromDisk();
+    this.processNextJob();
   }
 }
 

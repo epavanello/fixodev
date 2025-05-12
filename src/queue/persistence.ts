@@ -49,6 +49,7 @@ export const loadQueueFromDisk = async (): Promise<Job[]> => {
     });
 
     logger.info(`Loaded ${queue.length} jobs from disk`);
+
     return queue;
   } catch (error) {
     logger.error(error, 'Failed to load queue from disk');

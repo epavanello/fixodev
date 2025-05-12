@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { logger } from './config/logger';
 import { appConfig } from './config/app';
 import { jobQueue } from './queue';
-import { loadQueueFromDisk, saveQueueToDisk } from './queue/persistence';
+import { saveQueueToDisk } from './queue/persistence';
 import { webhookRouter } from './routes/webhook';
 import { healthRouter } from './routes/health';
 
@@ -22,7 +22,7 @@ app.route('/', healthRouter);
 const start = async () => {
   try {
     // Load queue state from disk
-    await loadQueueFromDisk();
+    await jobQueue.loadState();
 
     // Set up periodic queue persistence
     const SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes

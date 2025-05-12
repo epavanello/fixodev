@@ -3,6 +3,7 @@ import { logger } from '../config/logger';
 import { jobQueue } from '../queue';
 import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
+import { GitHubEventType } from '@/types/github';
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
@@ -34,7 +35,7 @@ const router = new Hono();
 router.post('/github', async c => {
   try {
     const signature = c.req.header('x-hub-signature-256');
-    const event = c.req.header('x-github-event');
+    const event = c.req.header('x-github-event') as GitHubEventType;
     const deliveryId = c.req.header('x-github-delivery');
 
     if (!signature) {

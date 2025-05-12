@@ -51,7 +51,7 @@ export const processJob = async (job: Job): Promise<void> => {
         const commentBody = job.payload.comment.body;
 
         // Let LLM analyze the repository and implement changes
-        const analysis = await analyzeCode(repoPath, {
+        const analysis = await analyzeCode({
           command: commentBody,
           repositoryPath: repoPath,
           language: config.runtime,

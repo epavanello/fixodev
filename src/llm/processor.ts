@@ -71,10 +71,7 @@ const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => 
 /**
  * Analyze code using LLM
  */
-export const analyzeCode = async (
-  codeOrPath: string,
-  context: CodeContext,
-): Promise<RepositoryAnalysis> => {
+export const analyzeCode = async (context: CodeContext): Promise<RepositoryAnalysis> => {
   try {
     logger.info({ command: context.command }, 'Analyzing repository for changes');
 
