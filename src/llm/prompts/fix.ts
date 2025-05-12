@@ -3,15 +3,7 @@ import { CodeContext } from '../processor';
 /**
  * Generate a prompt for fixing code issues
  */
-export const generateFixPrompt = (
-  code: string,
-  issue: string,
-  context?: {
-    filePath?: string;
-    language?: string;
-    dependencies?: string[];
-  },
-): string => {
+export const generateFixPrompt = (code: string, issue: string, context: CodeContext): string => {
   const contextInfo = context
     ? `
 Context:

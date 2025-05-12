@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { envConfig } from './env';
 
-export const loggerConfig = {
+export const loggerConfig: pino.LoggerOptions = {
   level: envConfig.LOG_LEVEL,
   transport: {
     target: 'pino-pretty',

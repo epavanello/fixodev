@@ -42,7 +42,7 @@ export const processJob = async (job: Job): Promise<void> => {
       const config = (await loadBotConfig(repoPath)) as BotConfig;
 
       // Create branch for changes
-      const branchName = `fix/${job.id}`;
+      const branchName = `job-${job.id}`;
       await createBranch(git, branchName);
 
       // Implement requested changes using LLM
