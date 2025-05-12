@@ -6,11 +6,26 @@ import { createPullRequest, generatePRContent } from '../github/pr';
 import { executeCommand } from '../docker/executor';
 import { Runtime } from '../docker';
 import { loadBotConfig } from '../utils/yaml';
-import { fixLinting as llmFixLinting, fixTests as llmFixTests } from '../llm/processor';
+import {
+  fixLinting as llmFixLinting,
+  fixTests as llmFixTests,
+  fixCode,
+  analyzeCode,
+} from '../llm/processor';
 import { GitHubApp } from '../github/app';
 import { JobError } from '../utils/error';
 import { readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
+
+interface CodeChange {
+  filePath: string;
+  description: string;
+  dependencies?: string[];
+}
+
+interface RepositoryAnalysis {
+  changes: CodeChange[];
+}
 
 /**
  * Process a job from the queue
@@ -33,6 +48,34 @@ export const processJob = async (job: Job): Promise<void> => {
       // Create branch for changes
       const branchName = `fix/${job.id}`;
       await createBranch(git, branchName);
+
+      // Implement requested changes using LLM
+      if (job.payload.comment?.body) {
+        logger.info({ jobId: job.id }, 'Implementing requested changes');
+        const commentBody = job.payload.comment.body;
+
+        // Let LLM analyze the repository and implement changes
+        const analysis = await analyzeCode(repoPath, {
+          command: commentBody,
+          repositoryPath: repoPath,
+          language: config.runtime,
+        });
+
+        // Apply the suggested changes
+        for (const change of analysis.changes) {
+          const fileContent = await readFile(join(repoPath, change.filePath), 'utf8');
+          const fixedCode = await fixCode(fileContent, change.description, {
+            filePath: change.filePath,
+            language: getFileLanguage(change.filePath),
+            dependencies: change.dependencies,
+          });
+
+          if (fixedCode) {
+            await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');
+            logger.info({ jobId: job.id, file: change.filePath }, 'Applied requested changes');
+          }
+        }
+      }
 
       // Run linting if configured
       if (config.scripts.lint) {

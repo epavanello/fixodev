@@ -1,3 +1,5 @@
+import { CodeContext } from '../processor';
+
 /**
  * Generate a prompt for analyzing code quality
  */
@@ -129,5 +131,36 @@ Format your response as a JSON object with the following structure:
   "structure": ["observation1", "observation2", ...],
   "coupling": ["issue1", "issue2", ...],
   "scalability": ["concern1", "concern2", ...]
+}`;
+};
+
+/**
+ * Generate a prompt for analyzing repository changes
+ */
+export const generateRepositoryAnalysisPrompt = (
+  repositoryPath: string,
+  context: CodeContext,
+): string => {
+  return `You are a professional developer. Analyze the repository and suggest changes based on the following command:
+"${context.command}"
+
+Repository path: ${repositoryPath}
+Language: ${context.language || 'unknown'}
+
+Please analyze the repository and provide a list of changes needed to implement the command.
+For each change, specify:
+1. The file path that needs to be modified
+2. A description of what changes are needed
+3. Any dependencies that need to be updated (if applicable)
+
+Format your response as a JSON object with the following structure:
+{
+  "changes": [
+    {
+      "filePath": "path/to/file",
+      "description": "What changes are needed",
+      "dependencies": ["dependency1", "dependency2"] // optional
+    }
+  ]
 }`;
 };

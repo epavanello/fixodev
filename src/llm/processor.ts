@@ -3,46 +3,53 @@ import { envConfig } from '../config/env';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { generateFixPrompt, generateLintFixPrompt, generateTestFixPrompt } from './prompts/fix';
-import { generateQualityAnalysisPrompt } from './prompts/analyze';
+import { generateQualityAnalysisPrompt, generateRepositoryAnalysisPrompt } from './prompts/analyze';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: envConfig.OPENAI_API_KEY,
 });
 
-interface CodeContext {
+export interface CodeContext {
   filePath?: string;
   language?: string;
   dependencies?: string[];
   linter?: string;
   testFramework?: string;
   projectType?: string;
+  command?: string;
+  repositoryPath?: string;
+}
+
+interface CodeChange {
+  filePath: string;
+  description: string;
+  dependencies?: string[];
+}
+
+interface RepositoryAnalysis {
+  changes: CodeChange[];
 }
 
 /**
  * Analyze code using LLM
  */
 export const analyzeCode = async (
-  code: string,
+  codeOrPath: string,
   context: CodeContext,
-): Promise<{
-  quality: string[];
-  bugs: string[];
-  performance: string[];
-  security: string[];
-  improvements: string[];
-}> => {
+): Promise<RepositoryAnalysis> => {
   try {
-    logger.info({ filePath: context.filePath }, 'Analyzing code');
+    logger.info({ command: context.command }, 'Analyzing repository for changes');
 
-    const prompt = generateQualityAnalysisPrompt(code, context);
+    const prompt = generateRepositoryAnalysisPrompt(codeOrPath, context);
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
           role: 'system',
-          content: 'You are a professional code reviewer. Provide analysis in JSON format.',
+          content:
+            'You are a professional developer. Analyze the repository and suggest changes based on the command.',
         },
         {
           role: 'user',
@@ -52,15 +59,17 @@ export const analyzeCode = async (
       temperature: 0.2,
     });
 
-    const result = JSON.parse(response.choices[0].message.content || '{}');
+    const result = JSON.parse(
+      response.choices[0].message.content || '{"changes": []}',
+    ) as RepositoryAnalysis;
 
-    logger.info({ filePath: context.filePath }, 'Code analysis completed');
+    logger.info({ command: context.command }, 'Repository analysis completed');
 
     return result;
   } catch (error) {
-    logger.error({ filePath: context.filePath, error }, 'Failed to analyze code');
+    logger.error({ command: context.command, error }, 'Failed to analyze repository');
     throw new GitHubError(
-      `Failed to analyze code: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to analyze repository: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 };
