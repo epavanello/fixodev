@@ -170,7 +170,7 @@ export class AgentContext {
   /**
    * Record a tool call in memory
    */
-  recordToolCall(toolCall: ToolCall, result: any): string {
+  recordToolCall(toolCall: ToolCall, result: unknown): string {
     return this.memory.add({
       type: 'tool_call',
       content: {
@@ -190,8 +190,8 @@ export class AgentContext {
    */
   addCodeInsight(insight: {
     type: string;
-    content: any;
-    metadata?: Record<string, any>;
+    content: unknown;
+    metadata?: Record<string, unknown>;
     importance?: number;
   }): string {
     return this.memory.add({

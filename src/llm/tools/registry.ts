@@ -1,11 +1,11 @@
 import * as z from 'zod';
-import { Tool, createTool, TaskCompletionStatus } from './types';
+import { Tool, DefaultTool, createTool, TaskCompletionStatus } from './types';
 
 /**
  * Registry for managing tools available to the LLM agent
  */
 export class ToolRegistry {
-  private tools: Map<string, Tool<any, any>> = new Map();
+  private tools = new Map<string, DefaultTool>();
 
   /**
    * Register a new tool in the registry
@@ -15,7 +15,7 @@ export class ToolRegistry {
       throw new Error(`Tool with name "${tool.name}" is already registered`);
     }
 
-    this.tools.set(tool.name, tool as Tool<any, any>);
+    this.tools.set(tool.name, tool as unknown as DefaultTool);
     return this;
   }
 
@@ -36,14 +36,14 @@ export class ToolRegistry {
   /**
    * Get all registered tools
    */
-  getAllTools(): Tool<any, any>[] {
+  getAllTools(): DefaultTool[] {
     return Array.from(this.tools.values());
   }
 
   /**
    * Get JSON schema for all registered tools
    */
-  getToolsJSONSchema(): Record<string, any>[] {
+  getToolsJSONSchema(): Record<string, unknown>[] {
     return this.getAllTools().map(tool => ({
       name: tool.name,
       description: tool.description,
@@ -54,7 +54,7 @@ export class ToolRegistry {
   /**
    * Execute a tool by name with provided parameters
    */
-  async execute<R>(name: string, params: any): Promise<R> {
+  async execute<R>(name: string, params: unknown): Promise<R> {
     const tool = this.tools.get(name);
 
     if (!tool) {
@@ -72,7 +72,7 @@ export class ToolRegistry {
 /**
  * Create a task completion tool that allows the agent to signal when a task is complete
  */
-export function createTaskCompletionTool(): Tool {
+export function createTaskCompletionTool() {
   return createTool({
     name: 'taskCompletion',
     description: 'Signal when the current task is complete or if more iterations are needed',

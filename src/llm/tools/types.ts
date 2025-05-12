@@ -12,7 +12,7 @@ export enum TaskCompletionStatus {
 /**
  * Interface for all tools that can be used by the LLM agent
  */
-export interface Tool<T extends z.ZodType = z.ZodType, R = any> {
+export interface Tool<T extends z.ZodType = z.ZodType, R = unknown> {
   /**
    * Unique name for the tool
    */
@@ -41,8 +41,13 @@ export interface Tool<T extends z.ZodType = z.ZodType, R = any> {
   /**
    * Generate a JSON Schema for tool parameters
    */
-  getParameterJSONSchema: () => Record<string, any>;
+  getParameterJSONSchema: () => Record<string, unknown>;
 }
+
+/**
+ * Default tool type with unknown return type
+ */
+export type DefaultTool = Tool<z.ZodType, unknown>;
 
 /**
  * Factory function to create a tool with correct typing

@@ -7,15 +7,17 @@ const openai = new OpenAI({
   apiKey: envConfig.OPENAI_API_KEY,
 });
 
+interface CompletionOptions {
+  maxTokens?: number;
+  temperature?: number;
+}
+
 /**
  * Generate a completion
  */
 export const generateCompletion = async (
   prompt: string,
-  options: {
-    maxTokens?: number;
-    temperature?: number;
-  } = {},
+  options: CompletionOptions = {},
 ): Promise<string> => {
   try {
     const { maxTokens = 1000, temperature = 0.7 } = options;

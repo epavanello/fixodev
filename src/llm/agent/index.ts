@@ -9,7 +9,8 @@ import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
 import { envConfig } from '../../config/env';
 import { createTaskCompletionTool } from '../tools/registry';
-import { TaskCompletionStatus } from '../tools/types';
+import { TaskCompletionStatus, Tool } from '../tools/types';
+import * as z from 'zod';
 
 /**
  * Options for creating an agent
@@ -116,7 +117,7 @@ export class Agent {
   /**
    * Register a tool with the agent
    */
-  registerTool(tool: any): this {
+  registerTool<T extends z.ZodType, R>(tool: Tool<T, R>): this {
     this.context.getToolRegistry().register(tool);
     return this;
   }
