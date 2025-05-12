@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { Tool } from './types';
+import { Tool, createTool, TaskCompletionStatus } from './types';
 
 /**
  * Registry for managing tools available to the LLM agent
@@ -67,4 +67,27 @@ export class ToolRegistry {
     // Execute the tool with validated parameters
     return tool.execute(validatedParams) as Promise<R>;
   }
+}
+
+/**
+ * Create a task completion tool that allows the agent to signal when a task is complete
+ */
+export function createTaskCompletionTool(): Tool {
+  return createTool({
+    name: 'taskCompletion',
+    description: 'Signal when the current task is complete or if more iterations are needed',
+    schema: z.object({
+      completed: z.boolean().describe('Whether the task is completed or requires more processing'),
+      reason: z
+        .string()
+        .describe('Explanation of why the task is complete or requires more processing'),
+    }),
+    execute: async params => {
+      return {
+        status: params.completed
+          ? TaskCompletionStatus.COMPLETED
+          : TaskCompletionStatus.IN_PROGRESS,
+      };
+    },
+  });
 }

@@ -8,6 +8,8 @@ import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
 import { envConfig } from '../../config/env';
+import { createTaskCompletionTool } from '../tools/registry';
+import { TaskCompletionStatus } from '../tools/types';
 
 /**
  * Options for creating an agent
@@ -47,6 +49,11 @@ export interface AgentOptions {
    * The OpenAI API key to use (defaults to environment variable)
    */
   apiKey?: string;
+
+  /**
+   * Maximum number of iterations for a single task
+   */
+  maxIterations?: number;
 }
 
 /**
@@ -62,15 +69,6 @@ export interface AgentStep {
    * The output from the step
    */
   output: string;
-
-  /**
-   * The tool calls made during the step
-   */
-  toolCalls?: {
-    name: string;
-    args: any;
-    result: any;
-  }[];
 }
 
 /**
@@ -83,11 +81,13 @@ export class Agent {
   private verbose: boolean;
   private basePath: string;
   private steps: AgentStep[] = [];
+  private maxIterations: number;
 
   constructor(options: AgentOptions) {
     this.basePath = options.basePath;
     this.model = options.model || 'gpt-4o';
     this.verbose = options.verbose || false;
+    this.maxIterations = options.maxIterations || 5;
 
     // Initialize OpenAI client
     this.openai = new OpenAI({
@@ -96,6 +96,9 @@ export class Agent {
 
     // Initialize tool registry
     const toolRegistry = new ToolRegistry();
+
+    // Register the task completion tool
+    toolRegistry.register(createTaskCompletionTool());
 
     // Initialize memory store
     const memory = new MemoryStore();
@@ -119,123 +122,177 @@ export class Agent {
   }
 
   /**
-   * Run the agent with a given input
+   * Run the agent with a given input, iterating until task completion or max iterations
    */
   async run(input: string): Promise<string> {
     try {
       // Add user message to context
       this.context.addUserMessage(input);
 
+      let currentIteration = 0;
+      let isTaskComplete = false;
+      let finalOutput = '';
+
+      // Store the input for the first step
       const step: AgentStep = {
         input,
         output: '',
-        toolCalls: [],
       };
 
-      // Get the current conversation for the prompt
-      const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
+      while (!isTaskComplete && currentIteration < this.maxIterations) {
+        currentIteration++;
 
-      // Get available tools as JSON Schema
-      const tools = this.context
-        .getToolRegistry()
-        .getAllTools()
-        .map(tool => ({
-          type: 'function' as const,
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.getParameterJSONSchema(),
-          },
-        }));
-
-      // Log request if verbose
-      if (this.verbose) {
-        logger.debug({ messages, tools }, 'Agent request');
-      }
-
-      // Send the request to OpenAI
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages,
-        tools,
-        tool_choice: 'auto',
-      });
-
-      // Extract the response content and tool calls
-      const responseMessage = response.choices[0].message;
-
-      if (this.verbose) {
-        logger.debug({ responseMessage }, 'Agent response');
-      }
-
-      // Check if the LLM wants to call tools
-      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-        for (const toolCall of responseMessage.tool_calls) {
-          try {
-            const toolName = toolCall.function.name;
-            const toolArgs = JSON.parse(toolCall.function.arguments);
-
-            // Log tool call if verbose
-            if (this.verbose) {
-              logger.debug({ toolName, toolArgs }, 'Tool call');
-            }
-
-            // Execute the tool
-            const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
-
-            // Log tool result if verbose
-            if (this.verbose) {
-              logger.debug({ toolName, result }, 'Tool result');
-            }
-
-            // Add tool result to context
-            this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));
-
-            // Record the tool call in memory
-            const toolCallObj = ToolCallSchema.parse({
-              id: toolCall.id,
-              name: toolName,
-              arguments: toolArgs,
-            });
-
-            this.context.recordToolCall(toolCallObj, result);
-
-            // Add to step record
-            step.toolCalls!.push({
-              name: toolName,
-              args: toolArgs,
-              result,
-            });
-          } catch (error) {
-            // Handle tool execution error
-            const errorMessage = `Error executing tool: ${(error as Error).message}`;
-
-            logger.error({ error }, errorMessage);
-
-            // Add error as tool result
-            this.context.addToolResultMessage(
-              toolCall.id,
-              toolCall.function.name,
-              JSON.stringify({ error: errorMessage }),
-            );
-          }
+        if (this.verbose) {
+          logger.debug(
+            { iteration: currentIteration, maxIterations: this.maxIterations },
+            'Starting agent iteration',
+          );
         }
 
-        // After all tools are executed, get the final response
-        return await this.getFinalResponse();
-      } else {
-        // No tool calls, just return the content
-        const output = responseMessage.content || '';
+        // Get the current conversation for the prompt
+        const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
 
-        // Add assistant message to context
-        this.context.addAssistantMessage(output);
+        // Get available tools as JSON Schema
+        const tools = this.context
+          .getToolRegistry()
+          .getAllTools()
+          .map(tool => ({
+            type: 'function' as const,
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.getParameterJSONSchema(),
+            },
+          }));
 
-        // Add to step record
-        step.output = output;
-        this.steps.push(step);
+        // Log request if verbose
+        if (this.verbose) {
+          logger.debug({ messages, tools, iteration: currentIteration }, 'Agent request');
+        }
 
-        return output;
+        // Send the request to OpenAI
+        const response = await this.openai.chat.completions.create({
+          model: this.model,
+          messages,
+          tools,
+          tool_choice: 'auto',
+          parallel_tool_calls: true,
+        });
+
+        // Extract the response content and tool calls
+        const responseMessage = response.choices[0].message;
+
+        if (this.verbose) {
+          logger.debug({ responseMessage, iteration: currentIteration }, 'Agent response');
+        }
+
+        // Set default for this iteration's outcome
+        let iterationOutput = responseMessage.content || '';
+
+        // Check if the LLM wants to call tools
+        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+          for (const toolCall of responseMessage.tool_calls) {
+            try {
+              const toolName = toolCall.function.name;
+              const toolArgs = JSON.parse(toolCall.function.arguments);
+
+              // Log tool call if verbose
+              if (this.verbose) {
+                logger.debug({ toolName, toolArgs, iteration: currentIteration }, 'Tool call');
+              }
+
+              // Execute the tool
+              const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
+
+              // Log tool result if verbose
+              if (this.verbose) {
+                logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
+              }
+
+              // Check if this is the task completion tool
+              if (toolName === 'taskCompletion') {
+                const completionResult = result as { status: TaskCompletionStatus };
+                if (completionResult.status === TaskCompletionStatus.COMPLETED) {
+                  isTaskComplete = true;
+                  logger.info(
+                    { reason: toolArgs.reason, iteration: currentIteration },
+                    'Task completed',
+                  );
+                } else {
+                  logger.info(
+                    { reason: toolArgs.reason, iteration: currentIteration },
+                    'Task requires more processing',
+                  );
+                }
+              }
+
+              // Add tool result to context
+              this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));
+
+              // Record the tool call in memory
+              const toolCallObj = ToolCallSchema.parse({
+                id: toolCall.id,
+                name: toolName,
+                arguments: toolArgs,
+              });
+
+              this.context.recordToolCall(toolCallObj, result);
+            } catch (error) {
+              // Handle tool execution error
+              const errorMessage = `Error executing tool: ${(error as Error).message}`;
+
+              logger.error({ error, iteration: currentIteration }, errorMessage);
+
+              // Add error as tool result
+              this.context.addToolResultMessage(
+                toolCall.id,
+                toolCall.function.name,
+                JSON.stringify({ error: errorMessage }),
+              );
+            }
+          }
+
+          // If this iteration should terminate the task or
+          // if we've reached max iterations, get the final response
+          if (isTaskComplete || currentIteration >= this.maxIterations) {
+            finalOutput = await this.getFinalResponse();
+            step.output = finalOutput;
+            this.steps.push(step);
+            return finalOutput;
+          }
+        } else {
+          // No tool calls, just add content as a message and continue or finish
+          iterationOutput = responseMessage.content || '';
+
+          // If we didn't get a completion signal via a tool call, we'll interpret
+          // a direct response without tool calls on the final iteration as completion
+          if (currentIteration >= this.maxIterations) {
+            isTaskComplete = true;
+            finalOutput = iterationOutput;
+
+            // Add assistant message to context
+            this.context.addAssistantMessage(finalOutput);
+
+            // Add to step record
+            step.output = finalOutput;
+            this.steps.push(step);
+
+            return finalOutput;
+          }
+
+          // Otherwise, add the message and continue to the next iteration
+          this.context.addAssistantMessage(iterationOutput);
+        }
       }
+
+      // If we're here, we've hit the max iterations without a completion signal
+      logger.warn(
+        { maxIterations: this.maxIterations },
+        'Reached maximum iterations without explicit task completion',
+      );
+
+      // Return the final content from the last iteration
+      return finalOutput;
     } catch (error) {
       logger.error({ error }, 'Agent execution error');
       throw error;

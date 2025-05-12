@@ -2,6 +2,14 @@ import * as z from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
+ * Represents the completion status of a task
+ */
+export enum TaskCompletionStatus {
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+}
+
+/**
  * Interface for all tools that can be used by the LLM agent
  */
 export interface Tool<T extends z.ZodType = z.ZodType, R = any> {
