@@ -156,6 +156,24 @@ export class AgentContext {
   }
 
   /**
+   * Add an assistant message with tool calls
+   */
+  addAssistantToolCallMessage(content: string, toolCalls: ToolCall[]): Message {
+    // For now we'll just add it as a regular assistant message with the tool calls described in content
+    // In the future this could be enhanced to store the actual tool call data in the message
+    const toolCallsDescription = toolCalls
+      .map(tc => `Tool Call: ${tc.name}(${JSON.stringify(tc.arguments)})`)
+      .join('\n');
+
+    const fullContent = content ? `${content}\n\n${toolCallsDescription}` : toolCallsDescription;
+
+    return this.addMessage({
+      role: MessageRole.ASSISTANT,
+      content: fullContent,
+    });
+  }
+
+  /**
    * Add a tool result message
    */
   addToolResultMessage(toolCallId: string, toolName: string, content: string): Message {

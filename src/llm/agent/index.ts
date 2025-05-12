@@ -192,6 +192,19 @@ export class Agent {
 
         // Check if the LLM wants to call tools
         if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+          // Add the assistant response with tool calls to the context
+          const toolCalls = responseMessage.tool_calls.map(toolCall => {
+            const toolName = toolCall.function.name;
+            const toolArgs = JSON.parse(toolCall.function.arguments);
+            return ToolCallSchema.parse({
+              id: toolCall.id,
+              name: toolName,
+              arguments: toolArgs,
+            });
+          });
+
+          this.context.addAssistantToolCallMessage(responseMessage.content || '', toolCalls);
+
           for (const toolCall of responseMessage.tool_calls) {
             try {
               const toolName = toolCall.function.name;
@@ -265,6 +278,9 @@ export class Agent {
           // No tool calls, just add content as a message and continue or finish
           iterationOutput = responseMessage.content || '';
 
+          // Add assistant message to context
+          this.context.addAssistantMessage(iterationOutput);
+
           // If we didn't get a completion signal via a tool call, we'll interpret
           // a direct response without tool calls on the final iteration as completion
           if (currentIteration >= this.maxIterations) {
@@ -280,9 +296,6 @@ export class Agent {
 
             return finalOutput;
           }
-
-          // Otherwise, add the message and continue to the next iteration
-          this.context.addAssistantMessage(iterationOutput);
         }
       }
 
