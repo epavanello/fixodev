@@ -1,54 +1,28 @@
-import fastify from 'fastify';
-import cors from '@fastify/cors';
-import { config } from 'dotenv';
-import { join } from 'path';
-
-// Load environment variables
-config();
-
-// Import configuration
-import { appConfig } from './config/app';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
 import { logger } from './config/logger';
-
-// Import webhooks
-import { registerWebhookRoutes } from './github/webhooks';
-
-// Import queue
+import { appConfig } from './config/app';
 import { jobQueue } from './queue';
 import { loadQueueFromDisk, saveQueueToDisk } from './queue/persistence';
+import { webhookRouter } from './routes/webhook';
+import { healthRouter } from './routes/health';
 
-function createApp() {
-  const app = fastify({
-    logger,
-  });
+// Load environment variables
+import { config } from 'dotenv';
+config();
 
-  // Register plugins
-  app.register(cors, {
-    origin: true, // Allow all origins in development
-  });
+// Create Hono app
+const app = new Hono();
 
-  // Register routes
-  app.get('/health', async () => {
-    return { status: 'ok' };
-  });
-
-  return app;
-}
-
-export type App = ReturnType<typeof createApp>;
-
-const app = createApp();
-
-// Register webhook routes
-registerWebhookRoutes(app);
+// Register routes
+app.route('/api/webhooks', webhookRouter);
+app.route('/', healthRouter);
 
 // Start the server
 const start = async () => {
   try {
     // Load queue state from disk
-    const savedJobs = await loadQueueFromDisk();
-
-    // TODO: Add logic to restore queue state
+    await loadQueueFromDisk();
 
     // Set up periodic queue persistence
     const SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -56,27 +30,27 @@ const start = async () => {
       await saveQueueToDisk(jobQueue.getJobs());
     }, SAVE_INTERVAL);
 
-    // Start server
-    await app.listen({
+    // Start the server
+    serve({
+      fetch: app.fetch,
       port: appConfig.port,
-      host: appConfig.host,
+      hostname: appConfig.host,
     });
 
-    app.log.info(`Server is running on ${appConfig.host}:${appConfig.port}`);
+    logger.info(`Server is running on ${appConfig.host}:${appConfig.port}`);
   } catch (err) {
-    app.log.error(err);
+    logger.error(err);
     process.exit(1);
   }
 };
 
 // Graceful shutdown
 const shutdown = async () => {
-  app.log.info('Shutting down server...');
+  logger.info('Shutting down server...');
 
   // Save queue state before exiting
   await saveQueueToDisk(jobQueue.getJobs());
 
-  await app.close();
   process.exit(0);
 };
 

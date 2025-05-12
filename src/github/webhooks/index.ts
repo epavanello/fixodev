@@ -33,57 +33,64 @@ interface WebhookPayload {
 
 export const registerWebhookRoutes = (app: App) => {
   // GitHub webhook endpoint
-  app.post('/api/webhooks/github', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const signature = request.headers['x-hub-signature-256'] as string;
-      const event = request.headers['x-github-event'] as string;
-      const deliveryId = request.headers['x-github-delivery'] as string;
+  app.route({
+    method: 'POST',
+    url: '/api/webhooks/github',
+    config: {
+      rawBody: true,
+    },
+    handler: async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const signature = request.headers['x-hub-signature-256'] as string;
+        const event = request.headers['x-github-event'] as string;
+        const deliveryId = request.headers['x-github-delivery'] as string;
 
-      // Verify webhook signature
-      if (!signature) {
-        throw new GitHubError('Missing webhook signature');
+        // Verify webhook signature
+        if (!signature) {
+          throw new GitHubError('Missing webhook signature');
+        }
+
+        const isValid = await webhooks.verify(request.rawBody as string, signature);
+
+        if (!isValid) {
+          throw new GitHubError('Invalid webhook signature');
+        }
+
+        const payload = request.body as WebhookPayload;
+
+        logger.info(
+          {
+            event,
+            action: payload.action,
+            repository: payload.repository?.full_name,
+            deliveryId,
+          },
+          'Received GitHub webhook',
+        );
+
+        // Validate required payload fields
+        if (!payload.installation?.id || !payload.repository?.clone_url) {
+          throw new GitHubError('Missing required payload fields');
+        }
+
+        // Create job for processing
+        const job = jobQueue.addJob({
+          repositoryUrl: payload.repository.clone_url,
+          installationId: payload.installation.id,
+          eventType: event,
+          payload,
+        });
+
+        return { success: true, jobId: job.id };
+      } catch (error) {
+        logger.error({ error }, 'Error processing webhook');
+
+        if (error instanceof GitHubError) {
+          return reply.status(400).send({ error: error.message });
+        }
+
+        return reply.status(500).send({ error: 'Internal Server Error' });
       }
-
-      const isValid = await webhooks.verify(request.body as string, signature);
-
-      if (!isValid) {
-        throw new GitHubError('Invalid webhook signature');
-      }
-
-      const payload = request.body as WebhookPayload;
-
-      logger.info(
-        {
-          event,
-          action: payload.action,
-          repository: payload.repository?.full_name,
-          deliveryId,
-        },
-        'Received GitHub webhook',
-      );
-
-      // Validate required payload fields
-      if (!payload.installation?.id || !payload.repository?.clone_url) {
-        throw new GitHubError('Missing required payload fields');
-      }
-
-      // Create job for processing
-      const job = jobQueue.addJob({
-        repositoryUrl: payload.repository.clone_url,
-        installationId: payload.installation.id,
-        eventType: event,
-        payload,
-      });
-
-      return { success: true, jobId: job.id };
-    } catch (error) {
-      logger.error({ error }, 'Error processing webhook');
-
-      if (error instanceof GitHubError) {
-        return reply.status(400).send({ error: error.message });
-      }
-
-      return reply.status(500).send({ error: 'Internal Server Error' });
-    }
+    },
   });
 };

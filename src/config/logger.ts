@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { envConfig } from './env';
 
-export const logger = pino({
+export const loggerConfig = {
   level: envConfig.LOG_LEVEL,
   transport: {
     target: 'pino-pretty',
@@ -11,4 +11,6 @@ export const logger = pino({
       ignore: 'pid,hostname',
     },
   },
-});
+};
+
+export const logger = pino(loggerConfig);

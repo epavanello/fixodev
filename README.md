@@ -12,13 +12,13 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 ## Setup
 
 1. Clone the repository
-2. Install dependencies: `npm install`
+2. Install dependencies: `bun install`
 3. Copy `env.example` to `.env` and fill in the required values
-4. Start the development server: `npm run dev`
+4. Start the development server: `bun run dev`
 
 ## Architecture
 
-- Fastify server for webhook handling
+- Bun HTTP server for webhook handling
 - In-memory queue system with disk persistence
 - Docker-based execution for security and isolation
 - OpenAI integration for code analysis and fixes
@@ -27,22 +27,22 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 
 ```bash
 # Install dependencies
-npm install
+bun install
 
 # Start development server
-npm run dev
+bun run dev
 
 # Lint code
-npm run lint
+bun run lint
 
 # Format code
-npm run format
+bun run format
 
 # Build for production
-npm run build
+bun run build
 
 # Start production server
-npm run start
+bun run start
 ```
 
 ## License

@@ -27,11 +27,7 @@ export interface BotConfig {
  */
 export const defaultBotConfig: BotConfig = {
   runtime: 'node:20',
-  scripts: {
-    lint: 'npm run lint',
-    test: 'npm run test',
-    format: 'npm run format',
-  },
+  scripts: {},
   autofix: true,
   branches: {
     autofix: true,

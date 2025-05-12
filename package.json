@@ -8,13 +8,14 @@
     "test": "test"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "ts-node -r tsconfig-paths/register src/app.ts",
-    "start": "node dist/app.js",
+    "build": "bun build ./src/app.ts --outdir ./dist",
+    "dev": "bun --watch src/app.ts",
+    "dev:proxy": "ngrok http 3000",
+    "start": "bun run dist/app.js",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "format": "prettier --write 'src/**/*.ts'",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "bun test"
   },
   "keywords": [
     "github",
@@ -26,32 +27,33 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@fastify/cors": "^8.0.0",
+    "@hono/node-server": "^1.14.1",
     "@octokit/auth-app": "^7.2.1",
     "@octokit/rest": "^21.1.1",
     "@octokit/webhooks": "^13.8.2",
     "dockerode": "^4.0.0",
     "dotenv": "^16.0.0",
-    "fastify": "^4.0.0",
+    "hono": "^4.7.9",
     "js-yaml": "^4.1.0",
+    "ngrok": "^5.0.0-beta.2",
     "openai": "^4.0.0",
     "pino": "^8.0.0",
     "simple-git": "^3.0.0",
     "yaml": "^2.0.0"
   },
   "devDependencies": {
+    "@types/bun": "^1.2.13",
     "@types/dockerode": "^3.3.0",
     "@types/js-yaml": "^4.0.0",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "concurrently": "^9.1.2",
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.0.0",
-    "ts-node": "^10.0.0",
-    "tsconfig-paths": "^4.0.0",
     "typescript": "^5.0.0"
   }
 }

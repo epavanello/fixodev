@@ -4,7 +4,7 @@
 
 ### 1.1 GitHub App Server
 
-**Technology**: Fastify
+**Technology**: Bun HTTP Server
 
 - Webhook handler endpoints for GitHub events
 - GitHub App authentication using JWT
@@ -48,7 +48,7 @@
     installationId: number;
     eventType: string;
     payload: any;
-    status: "pending" | "processing" | "completed" | "failed";
+    status: 'pending' | 'processing' | 'completed' | 'failed';
     createdAt: Date;
     updatedAt: Date;
     attempts: number;
@@ -64,7 +64,7 @@
 
 **Technology**: Dockerode with Docker socket
 
-- Pre-built images for Node.js 18/20
+- Pre-built images for Bun runtime
 - Isolated execution environment for each job
 - Resource limits and security constraints
 
@@ -73,8 +73,8 @@
 - Container configuration:
   ```typescript
   {
-    Image: 'ghbot/node:20',
-    Cmd: ['sh', '-c', 'cd /workspace && npm ci && npm run lint'],
+    Image: 'ghbot/bun:latest',
+    Cmd: ['sh', '-c', 'cd /workspace && bun install && bun run lint'],
     HostConfig: {
       Binds: [`${localRepoPath}:/workspace:ro`],
       Memory: 1024 * 1024 * 1024, // 1GB
@@ -134,24 +134,24 @@
 
 - Clone repository:
   ```typescript
-  await git.clone(repoUrl, localPath, ["--depth=1"]);
+  await git.clone(repoUrl, localPath, ['--depth=1']);
   ```
 - Create branch and commit changes:
   ```typescript
   await git.checkoutLocalBranch(`fix/${issueId}`);
-  await git.add(".");
-  await git.commit("Fix: Automated fix by GitHub Bot");
-  await git.push("origin", `fix/${issueId}`);
+  await git.add('.');
+  await git.commit('Fix: Automated fix by GitHub Bot');
+  await git.push('origin', `fix/${issueId}`);
   ```
 - Create PR via GitHub API:
   ```typescript
   await octokit.pulls.create({
     owner,
     repo,
-    title: "Automated fix by GitHub Bot",
+    title: 'Automated fix by GitHub Bot',
     head: `fix/${issueId}`,
-    base: "main",
-    body: "...",
+    base: 'main',
+    body: '...',
   });
   ```
 
@@ -173,7 +173,7 @@ OPENAI_API_KEY=
 
 # Application
 PORT=3000
-NODE_ENV=production
+BUN_ENV=production
 LOG_LEVEL=info
 MAX_CONCURRENT_JOBS=2
 ```
@@ -183,11 +183,11 @@ MAX_CONCURRENT_JOBS=2
 `.bot-config.yml` in user repositories:
 
 ```yaml
-runtime: node:20
+runtime: bun:latest
 scripts:
-  lint: npm run lint
-  test: npm run test
-  format: npm run format
+  lint: bun run lint
+  test: bun run test
+  format: bun run format
 autofix: true
 branches:
   autofix: true
@@ -199,17 +199,17 @@ branches:
 ### 3.1 Docker Compose Setup
 
 ```yaml
-version: "3"
+version: '3'
 services:
   app:
     build: .
     restart: always
     environment:
-      - NODE_ENV=production
+      - BUN_ENV=production
       - PORT=3000
       # Other env vars provided by Coolify
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - repos:/app/repos
@@ -223,35 +223,34 @@ volumes:
 ### 3.2 Dockerfile
 
 ```dockerfile
-FROM node:20-alpine
+FROM oven/bun:1
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN bun install --production
 
 COPY . .
-RUN npm run build
+RUN bun run build
 
 # Install Docker CLI
-RUN apk add --no-cache docker
+RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 3000
-CMD ["node", "dist/app.js"]
+CMD ["bun", "dist/app.js"]
 ```
 
 ### 3.3 Runtime Containers
 
 Pre-built images for supported runtimes:
 
-- `ghbot/node:18` - Node.js 18 with common dev tools
-- `ghbot/node:20` - Node.js 20 with common dev tools
+- `ghbot/bun:latest` - Latest Bun version with common dev tools
 
 ## 4. Implementation Flow
 
 ### 4.1 Project Initialization
 
-1. Set up TypeScript project with Fastify
+1. Set up TypeScript project with Bun
 2. Configure GitHub App (permissions, webhook endpoints)
 3. Implement webhook receiver and authentication
 
@@ -290,7 +289,7 @@ Pre-built images for supported runtimes:
 ```
 /
 ├── src/
-│   ├── app.ts                  # Entry point Fastify
+│   ├── app.ts                  # Entry point Bun
 │   ├── config/                 # Configurations
 │   │   ├── app.ts              # App configuration
 │   │   ├── env.ts              # Environment variables

@@ -30,9 +30,9 @@
   - [✓] Implement installation token fetching
   - [✓] Create GitHub API client wrapper
 
-## 3. Fastify Server Implementation
+## 3. Bun Server Implementation
 
-- [✓] Set up Fastify server
+- [✓] Set up Bun server
   - [✓] Configure CORS, logging, and error handling
   - [✓] Implement healthcheck endpoint
 - [✓] Create webhook handling endpoints

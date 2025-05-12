@@ -19,7 +19,7 @@ export interface EnvConfig {
   MAX_CONCURRENT_JOBS: string;
 
   // Docker
-  DOCKER_RUNTIME_PREFIX: string;
+  DOCKER_RUNTIME_PREFIX: string | undefined;
 }
 
 export const envConfig: EnvConfig = {
@@ -38,5 +38,5 @@ export const envConfig: EnvConfig = {
   MAX_CONCURRENT_JOBS: process.env.MAX_CONCURRENT_JOBS || '2',
 
   // Docker
-  DOCKER_RUNTIME_PREFIX: process.env.DOCKER_RUNTIME_PREFIX || 'ghbot',
+  DOCKER_RUNTIME_PREFIX: process.env.DOCKER_RUNTIME_PREFIX,
 };

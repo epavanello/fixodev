@@ -18,7 +18,10 @@ export enum Runtime {
  * Get Docker image name for runtime
  */
 export const getRuntimeImage = (runtime: Runtime): string => {
-  return `${RUNTIME_PREFIX}/${runtime}`;
+  if (RUNTIME_PREFIX) {
+    return `${RUNTIME_PREFIX}/${runtime}`;
+  }
+  return `${runtime}`;
 };
 
 /**
@@ -26,7 +29,7 @@ export const getRuntimeImage = (runtime: Runtime): string => {
  */
 export const checkDockerAvailability = async (): Promise<boolean> => {
   try {
-    const info = await docker.info();
+    await docker.info();
     logger.info('Docker is available');
     return true;
   } catch (error) {

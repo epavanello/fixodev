@@ -36,8 +36,7 @@ The service is designed to be fully automated, secure, and containerized, with f
 
 ### Initial Supported Runtimes
 
-- `node:18`
-- `node:20`
+- `bun:latest`
 - (Optional in future: python, go, java, ruby, php, rust)
 
 ---
@@ -46,7 +45,7 @@ The service is designed to be fully automated, secure, and containerized, with f
 
 ### Core Components (All written in TypeScript)
 
-- GitHub App server
+- GitHub App server (Bun HTTP)
 - Job queue (in-memory FIFO or BullMQ/Redis)
 - Docker orchestrator (using `dockerode`)
 - LLM client (e.g. OpenAI API or open-source model)
