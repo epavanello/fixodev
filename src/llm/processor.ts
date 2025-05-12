@@ -13,7 +13,7 @@ import {
   createListDirectoryTool,
   createFileExistsTool,
 } from './tools/file';
-import { createGrepTool, createFindFilesTool, createFindSymbolsTool } from './tools/search';
+import { createGrepTool, createFindFilesTool } from './tools/search';
 import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
 
@@ -68,7 +68,6 @@ const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => 
   // Register search tools
   agent.registerTool(createGrepTool(repositoryPath));
   agent.registerTool(createFindFilesTool(repositoryPath));
-  agent.registerTool(createFindSymbolsTool(repositoryPath));
 
   return agent;
 };
