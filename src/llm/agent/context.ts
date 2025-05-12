@@ -1,6 +1,7 @@
 import * as z from 'zod';
 import { MemoryStore, MemoryEntry } from './memory';
 import { ToolRegistry } from '../tools/registry';
+import { ChatCompletionRole } from 'openai/resources/chat/completions/completions';
 
 /**
  * Message roles in a conversation
@@ -9,7 +10,8 @@ export enum MessageRole {
   SYSTEM = 'system',
   USER = 'user',
   ASSISTANT = 'assistant',
-  TOOL = 'tool',
+  FUNCTION = 'function',
+  TOOL = 'tool', // For local use, will be mapped to 'function' when sending to OpenAI
 }
 
 /**
@@ -158,7 +160,7 @@ export class AgentContext {
    */
   addToolResultMessage(toolCallId: string, toolName: string, content: string): Message {
     return this.addMessage({
-      role: MessageRole.TOOL,
+      role: MessageRole.FUNCTION,
       toolName,
       toolCallId,
       content: typeof content === 'string' ? content : JSON.stringify(content),
@@ -225,15 +227,28 @@ export class AgentContext {
    * Generate a message-like object for prompt construction,
    * filtering to respect token limits
    */
-  getPromptMessages(): { role: string; content: string; name?: string; tool_call_id?: string }[] {
+  getPromptMessages(): {
+    role: ChatCompletionRole;
+    content: string;
+    name?: string;
+    tool_call_id?: string;
+  }[] {
     // This is a simplified version; in a real implementation,
     // you would need to count tokens and truncate history
-    return this.messages.map(msg => ({
-      role: msg.role,
-      content: msg.content,
-      ...(msg.toolName ? { name: msg.toolName } : {}),
-      ...(msg.toolCallId ? { tool_call_id: msg.toolCallId } : {}),
-    }));
+    return this.messages.map(msg => {
+      // Map internal MessageRole to OpenAI's ChatCompletionRole
+      const role =
+        msg.role === MessageRole.TOOL
+          ? ('function' as ChatCompletionRole)
+          : (msg.role as ChatCompletionRole);
+
+      return {
+        role,
+        content: msg.content,
+        ...(msg.toolName ? { name: msg.toolName } : {}),
+        ...(msg.toolCallId ? { tool_call_id: msg.toolCallId } : {}),
+      };
+    });
   }
 
   /**

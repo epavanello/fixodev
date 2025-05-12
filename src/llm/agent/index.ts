@@ -1,4 +1,8 @@
 import OpenAI from 'openai';
+import {
+  ChatCompletionRole,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions/completions';
 import { AgentContext, ToolCallSchema } from './context';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
@@ -295,29 +299,45 @@ export class Agent {
    * Convert internal message format to OpenAI's message format
    */
   private convertToOpenAIMessages(
-    messages: { role: string; content: string; name?: string; tool_call_id?: string }[],
-  ): any[] {
+    messages: { role: ChatCompletionRole; content: string; name?: string; tool_call_id?: string }[],
+  ): ChatCompletionMessageParam[] {
     return messages.map(msg => {
-      const baseMessage = {
-        role: msg.role as any,
-        content: msg.content,
-      };
-
-      if (msg.role === 'tool') {
+      if (msg.role === 'function' && msg.tool_call_id) {
+        // Function/tool response
         return {
-          ...baseMessage,
-          tool_call_id: msg.tool_call_id!,
-        };
-      }
-
-      if (msg.name) {
-        return {
-          ...baseMessage,
+          role: msg.role,
+          content: msg.content,
           name: msg.name,
-        };
+          tool_call_id: msg.tool_call_id,
+        } as ChatCompletionMessageParam;
+      } else if (msg.role === 'assistant' && msg.name) {
+        // Assistant with name
+        return {
+          role: msg.role,
+          content: msg.content,
+          name: msg.name,
+        } as ChatCompletionMessageParam;
+      } else if (msg.role === 'system') {
+        // System message
+        return {
+          role: msg.role,
+          content: msg.content,
+        } as ChatCompletionMessageParam;
+      } else if (msg.role === 'user') {
+        // User message
+        return {
+          role: msg.role,
+          content: msg.content,
+          ...(msg.name ? { name: msg.name } : {}),
+        } as ChatCompletionMessageParam;
       }
 
-      return baseMessage;
+      // Default case
+      return {
+        role: msg.role,
+        content: msg.content,
+        ...(msg.name ? { name: msg.name } : {}),
+      } as ChatCompletionMessageParam;
     });
   }
 }

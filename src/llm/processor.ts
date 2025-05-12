@@ -1,4 +1,8 @@
 import { OpenAI } from 'openai';
+import {
+  ChatCompletionSystemMessageParam,
+  ChatCompletionUserMessageParam,
+} from 'openai/resources/chat/completions/completions';
 import { envConfig } from '../config/env';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
@@ -166,11 +170,11 @@ Please provide only the corrected code with no explanations. The code should be 
           {
             role: 'system',
             content: 'You are a professional developer. Provide only the corrected code.',
-          },
+          } as ChatCompletionSystemMessageParam,
           {
             role: 'user',
             content: prompt,
-          },
+          } as ChatCompletionUserMessageParam,
         ],
         temperature: 0.2,
       });
@@ -251,11 +255,11 @@ Please provide only the corrected code with no explanations.`;
           {
             role: 'system',
             content: 'You are a professional developer. Provide only the corrected code.',
-          },
+          } as ChatCompletionSystemMessageParam,
           {
             role: 'user',
             content: prompt,
-          },
+          } as ChatCompletionUserMessageParam,
         ],
         temperature: 0.2,
       });
@@ -338,11 +342,11 @@ Please provide only the corrected code with no explanations.`;
           {
             role: 'system',
             content: 'You are a professional developer. Provide only the corrected code.',
-          },
+          } as ChatCompletionSystemMessageParam,
           {
             role: 'user',
             content: prompt,
-          },
+          } as ChatCompletionUserMessageParam,
         ],
         temperature: 0.2,
       });
