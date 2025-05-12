@@ -1,4 +1,4 @@
-# GitHub Bot
+# GitHub Bot2
 
 A GitHub App-based bot that automates code fixes and improvements through AI.
 
