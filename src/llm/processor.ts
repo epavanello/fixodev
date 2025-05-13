@@ -1,7 +1,3 @@
-import {
-  ChatCompletionSystemMessageParam,
-  ChatCompletionUserMessageParam,
-} from 'openai/resources/chat/completions/completions';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { Agent } from './agent';
@@ -14,7 +10,6 @@ import {
 import { createGrepTool, createFindFilesTool } from './tools/search';
 import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
-import { openai } from './client';
 import {
   createRepositoryAnalysisTool,
   RepositoryAnalysis,
@@ -119,7 +114,8 @@ export const fixCode = async (
     logger.info({ filePath: context.filePath }, 'Fixing code');
 
     if (!context.repositoryPath) {
-      // Legacy approach without agent
+      // Standalone mode: Use a minimal agent with a forced output tool
+      const fixCodeTool = createFixCodeTool();
       const prompt = `Fix the following issue in the code:
 ${issue}
 
@@ -132,26 +128,29 @@ Code:
 ${code}
 \`\`\`
 
-Please provide only the corrected code with no explanations. The code should be complete and ready to use.`;
+Please provide only the corrected code with no explanations. The code should be complete and ready to use.
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional developer. Provide only the corrected code.',
-          } as ChatCompletionSystemMessageParam,
-          {
-            role: 'user',
-            content: prompt,
-          } as ChatCompletionUserMessageParam,
-        ],
-        temperature: 0.2,
+You MUST use the "${fixCodeTool.name}" tool to return the corrected code. Do not provide explanations outside of the tool.`;
+
+      // Create a minimal agent for this specific task
+      const agent = new Agent({
+        basePath: '.', // Assuming no complex file ops for this standalone mode
+        model: 'gpt-4o-mini', // Or a model from context if appropriate
+        systemMessage: `You are a professional developer. Your task is to fix the provided code snippet. You MUST use the tool named "${fixCodeTool.name}" to return the corrected code. Do not provide explanations outside of the tool.`,
+        maxIterations: 3,
       });
 
-      const fixedCode = response.choices[0].message.content || '';
-      logger.info({ filePath: context.filePath }, 'Code fix completed');
-      return fixedCode;
+      // Run the agent with the issue and code
+      const response = await agent.run(prompt, {
+        outputTool: fixCodeTool,
+      });
+
+      if (!response) {
+        throw new Error('No response from agent for fixCode');
+      }
+
+      logger.info({ filePath: context.filePath }, 'Code fix completed via tool (standalone agent)');
+      return (response as FixedCode).code;
     }
 
     // Create repository agent
@@ -204,39 +203,45 @@ export const fixLinting = async (
     logger.info({ filePath: context.filePath }, 'Fixing linting issues');
 
     if (!context.repositoryPath) {
-      // Legacy approach without agent
-      const prompt = `Fix the following linting issues in the code:
-${lintErrors.join('\n')}
+      // Standalone mode: Use a minimal agent with a forced output tool
+      const fixLintingTool = createFixLintingTool();
+      const prompt = `I need you to fix the following linting issues in the code:
 
 File: ${context.filePath || 'unknown'}
 Language: ${context.language || 'unknown'}
 Linter: ${context.linter || 'unknown'}
+Issues:
+${lintErrors.join('\\n')}
 
-Code:
+Here is the current code:
 \`\`\`
 ${code}
 \`\`\`
 
-Please provide only the corrected code with no explanations.`;
+Please analyze the issues and provide the corrected code using the "${
+        fixLintingTool.name
+      }" tool. The code should be complete and ready to use.`;
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional developer. Provide only the corrected code.',
-          } as ChatCompletionSystemMessageParam,
-          {
-            role: 'user',
-            content: prompt,
-          } as ChatCompletionUserMessageParam,
-        ],
-        temperature: 0.2,
+      const agent = new Agent({
+        basePath: '.',
+        model: 'gpt-4', // Or a model from context if appropriate
+        systemMessage: `You are a professional developer. Your task is to fix linting issues in the provided code. You MUST use the tool named "${fixLintingTool.name}" to return the corrected code.`,
+        maxIterations: 3,
       });
 
-      const fixedCode = response.choices[0].message.content || '';
-      logger.info({ filePath: context.filePath }, 'Linting fix completed');
-      return fixedCode;
+      const response = await agent.run(prompt, {
+        outputTool: fixLintingTool,
+      });
+
+      if (!response) {
+        throw new Error('No response from agent for fixLinting');
+      }
+
+      logger.info(
+        { filePath: context.filePath },
+        'Linting fix completed via tool (standalone agent)',
+      );
+      return (response as FixedCode).code;
     }
 
     // Create repository agent
@@ -291,39 +296,42 @@ export const fixTests = async (
     logger.info({ filePath: context.filePath }, 'Fixing test failures');
 
     if (!context.repositoryPath) {
-      // Legacy approach without agent
-      const prompt = `Fix the following test failures:
-${testOutput}
+      // Standalone mode: Use a minimal agent with a forced output tool
+      const fixTestsTool = createFixTestsTool();
+      const prompt = `I need you to fix the following test failures:
 
 File: ${context.filePath || 'unknown'}
 Language: ${context.language || 'unknown'}
 Test Framework: ${context.testFramework || 'unknown'}
+Test Output:
+${testOutput}
 
-Code:
+Here is the current code:
 \`\`\`
 ${code}
 \`\`\`
 
-Please provide only the corrected code with no explanations.`;
+Please analyze the test failures and provide the corrected code using the "${
+        fixTestsTool.name
+      }" tool. The code should be complete and ready to use.`;
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional developer. Provide only the corrected code.',
-          } as ChatCompletionSystemMessageParam,
-          {
-            role: 'user',
-            content: prompt,
-          } as ChatCompletionUserMessageParam,
-        ],
-        temperature: 0.2,
+      const agent = new Agent({
+        basePath: '.',
+        model: 'gpt-4', // Or a model from context if appropriate
+        systemMessage: `You are a professional developer. Your task is to fix test failures in the provided code. You MUST use the tool named "${fixTestsTool.name}" to return the corrected code.`,
+        maxIterations: 3,
       });
 
-      const fixedCode = response.choices[0].message.content || '';
-      logger.info({ filePath: context.filePath }, 'Test fix completed');
-      return fixedCode;
+      const response = await agent.run(prompt, {
+        outputTool: fixTestsTool,
+      });
+
+      if (!response) {
+        throw new Error('No response from agent for fixTests');
+      }
+
+      logger.info({ filePath: context.filePath }, 'Test fix completed via tool (standalone agent)');
+      return (response as FixedCode).code;
     }
 
     // Create repository agent
