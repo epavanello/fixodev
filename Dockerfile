@@ -8,6 +8,7 @@ RUN apt-get update && \
     docker.io \
     curl \
     git \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 
