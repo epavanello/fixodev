@@ -1,5 +1,5 @@
 import * as z from 'zod';
-import { Tool, DefaultTool, createTool, TaskCompletionStatus } from './types';
+import { Tool, DefaultTool, createTool } from './types';
 
 /**
  * Registry for managing tools available to the LLM agent
@@ -75,19 +75,97 @@ export class ToolRegistry {
 export function createTaskCompletionTool() {
   return createTool({
     name: 'taskCompletion',
-    description: 'Signal when the current task is complete or if more iterations are needed',
+    description: 'Signal whether the objective has been achieved or not',
     schema: z.object({
-      completed: z.boolean().describe('Whether the task is completed or requires more processing'),
-      reason: z
-        .string()
-        .describe('Explanation of why the task is complete or requires more processing'),
+      objectiveAchieved: z
+        .boolean()
+        .describe('Whether the objective has been successfully achieved'),
+      reason: z.string().describe('Explanation of why the objective was or was not achieved'),
     }),
     execute: async params => {
       return {
-        status: params.completed
-          ? TaskCompletionStatus.COMPLETED
-          : TaskCompletionStatus.IN_PROGRESS,
+        objectiveAchieved: params.objectiveAchieved,
+        reason: params.reason,
       };
+    },
+  });
+}
+
+const CodeChangeSchema = z.object({
+  filePath: z.string().describe('Path to the file that needs changes'),
+  description: z.string().describe('Description of what changes are needed'),
+  dependencies: z.array(z.string()).optional().describe('Optional list of dependencies needed'),
+});
+
+export type CodeChange = z.infer<typeof CodeChangeSchema>;
+
+const RepositoryAnalysisSchema = z.object({
+  changes: z.array(CodeChangeSchema).describe('List of changes needed in the repository'),
+});
+
+export type RepositoryAnalysis = z.infer<typeof RepositoryAnalysisSchema>;
+
+// Schema for fixed code output
+const FixedCodeSchema = z.object({
+  code: z.string().describe('The fixed code content'),
+});
+
+export type FixedCode = z.infer<typeof FixedCodeSchema>;
+
+/**
+ * Create a tool for returning repository analysis results
+ */
+export function createRepositoryAnalysisTool() {
+  return createTool({
+    name: 'repositoryAnalysis',
+    description: 'Return the analysis results for repository changes',
+    schema: RepositoryAnalysisSchema,
+    execute: async params => {
+      return {
+        changes: params.changes,
+      };
+    },
+  });
+}
+
+/**
+ * Create a tool for returning fixed code
+ */
+export function createFixCodeTool() {
+  return createTool({
+    name: 'fixCode',
+    description: 'Return the fixed code after addressing the issue',
+    schema: FixedCodeSchema,
+    execute: async params => {
+      return params;
+    },
+  });
+}
+
+/**
+ * Create a tool for returning code with fixed linting issues
+ */
+export function createFixLintingTool() {
+  return createTool({
+    name: 'fixLinting',
+    description: 'Return the code with fixed linting issues',
+    schema: FixedCodeSchema,
+    execute: async params => {
+      return params;
+    },
+  });
+}
+
+/**
+ * Create a tool for returning code with fixed test issues
+ */
+export function createFixTestsTool() {
+  return createTool({
+    name: 'fixTests',
+    description: 'Return the code with fixed test issues',
+    schema: FixedCodeSchema,
+    execute: async params => {
+      return params;
     },
   });
 }

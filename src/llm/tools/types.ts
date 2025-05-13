@@ -2,17 +2,9 @@ import * as z from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
- * Represents the completion status of a task
- */
-export enum TaskCompletionStatus {
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-}
-
-/**
  * Interface for all tools that can be used by the LLM agent
  */
-export interface Tool<T extends z.ZodType = z.ZodType, R = unknown> {
+export interface Tool<PARAMS extends z.ZodType = z.ZodType, OUTPUT = unknown> {
   /**
    * Unique name for the tool
    */
@@ -26,17 +18,17 @@ export interface Tool<T extends z.ZodType = z.ZodType, R = unknown> {
   /**
    * Zod schema for the tool's parameters
    */
-  schema: T;
+  schema: PARAMS;
 
   /**
    * Method to execute the tool with validated parameters
    */
-  execute: (params: z.infer<T>) => Promise<R>;
+  execute: (params: z.infer<PARAMS>) => Promise<OUTPUT>;
 
   /**
    * Optional method to validate the result
    */
-  validateResult?: (result: R) => boolean;
+  validateResult?: (result: OUTPUT) => boolean;
 
   /**
    * Generate a JSON Schema for tool parameters
@@ -52,13 +44,13 @@ export type DefaultTool = Tool<z.ZodType, unknown>;
 /**
  * Factory function to create a tool with correct typing
  */
-export function createTool<T extends z.ZodType, R>(config: {
+export function createTool<PARAMS extends z.ZodType, OUTPUT>(config: {
   name: string;
   description: string;
-  schema: T;
-  execute: (params: z.infer<T>) => Promise<R>;
-  validateResult?: (result: R) => boolean;
-}): Tool<T, R> {
+  schema: PARAMS;
+  execute: (params: z.infer<PARAMS>) => Promise<OUTPUT>;
+  validateResult?: (result: OUTPUT) => boolean;
+}): Tool<PARAMS, OUTPUT> {
   return {
     ...config,
     getParameterJSONSchema: () => zodToJsonSchema(config.schema),

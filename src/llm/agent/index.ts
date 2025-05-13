@@ -7,10 +7,10 @@ import { AgentContext, ToolCallSchema } from './context';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
-import { envConfig } from '../../config/env';
 import { createTaskCompletionTool } from '../tools/registry';
-import { TaskCompletionStatus, Tool } from '../tools/types';
+import { Tool } from '../tools/types';
 import * as z from 'zod';
+import { openai } from '../client';
 
 /**
  * Options for creating an agent
@@ -91,9 +91,7 @@ export class Agent {
     this.maxIterations = options.maxIterations || 5;
 
     // Initialize OpenAI client
-    this.openai = new OpenAI({
-      apiKey: options.apiKey || envConfig.OPENAI_API_KEY,
-    });
+    this.openai = openai;
 
     // Initialize tool registry
     const toolRegistry = new ToolRegistry();
@@ -125,22 +123,18 @@ export class Agent {
   /**
    * Run the agent with a given input, iterating until task completion or max iterations
    */
-  async run(input: string): Promise<string> {
+  async run<PARAMS extends z.ZodType, OUTPUT>(
+    input: string,
+    { outputTool }: { outputTool: Tool<PARAMS, OUTPUT> },
+  ): Promise<OUTPUT | undefined> {
     try {
       // Add user message to context
       this.context.addUserMessage(input);
 
       let currentIteration = 0;
-      let isTaskComplete = false;
-      let finalOutput = '';
-
-      // Store the input for the first step
-      const step: AgentStep = {
-        input,
-        output: '',
-      };
-
-      while (!isTaskComplete && currentIteration < this.maxIterations) {
+      let needMoreProcessing = true;
+      let output: OUTPUT | undefined;
+      while (needMoreProcessing && currentIteration < this.maxIterations) {
         currentIteration++;
 
         if (this.verbose) {
@@ -154,17 +148,16 @@ export class Agent {
         const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
 
         // Get available tools as JSON Schema
-        const tools = this.context
-          .getToolRegistry()
-          .getAllTools()
-          .map(tool => ({
+        const tools = [...this.context.getToolRegistry().getAllTools(), ...[outputTool]].map(
+          tool => ({
             type: 'function' as const,
             function: {
               name: tool.name,
               description: tool.description,
               parameters: tool.getParameterJSONSchema(),
             },
-          }));
+          }),
+        );
 
         // Log request if verbose
         if (this.verbose) {
@@ -215,42 +208,30 @@ export class Agent {
                 logger.debug({ toolName, toolArgs, iteration: currentIteration }, 'Tool call');
               }
 
-              // Execute the tool
-              const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
+              if (toolName === outputTool.name) {
+                needMoreProcessing = false;
+                output = await outputTool.execute(toolArgs);
+              } else {
+                // Execute the tool
+                const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
 
-              // Log tool result if verbose
-              if (this.verbose) {
-                logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
-              }
-
-              // Check if this is the task completion tool
-              if (toolName === 'taskCompletion') {
-                const completionResult = result as { status: TaskCompletionStatus };
-                if (completionResult.status === TaskCompletionStatus.COMPLETED) {
-                  isTaskComplete = true;
-                  logger.info(
-                    { reason: toolArgs.reason, iteration: currentIteration },
-                    'Task completed',
-                  );
-                } else {
-                  logger.info(
-                    { reason: toolArgs.reason, iteration: currentIteration },
-                    'Task requires more processing',
-                  );
+                // Log tool result if verbose
+                if (this.verbose) {
+                  logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
                 }
+
+                // Add tool result to context
+                this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));
+
+                // Record the tool call in memory
+                const toolCallObj = ToolCallSchema.parse({
+                  id: toolCall.id,
+                  name: toolName,
+                  arguments: toolArgs,
+                });
+
+                this.context.recordToolCall(toolCallObj, result);
               }
-
-              // Add tool result to context
-              this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));
-
-              // Record the tool call in memory
-              const toolCallObj = ToolCallSchema.parse({
-                id: toolCall.id,
-                name: toolName,
-                arguments: toolArgs,
-              });
-
-              this.context.recordToolCall(toolCallObj, result);
             } catch (error) {
               // Handle tool execution error
               const errorMessage = `Error executing tool: ${(error as Error).message}`;
@@ -265,37 +246,12 @@ export class Agent {
               );
             }
           }
-
-          // If this iteration should terminate the task or
-          // if we've reached max iterations, get the final response
-          if (isTaskComplete || currentIteration >= this.maxIterations) {
-            finalOutput = await this.getFinalResponse();
-            step.output = finalOutput;
-            this.steps.push(step);
-            return finalOutput;
-          }
         } else {
           // No tool calls, just add content as a message and continue or finish
           iterationOutput = responseMessage.content || '';
 
           // Add assistant message to context
           this.context.addAssistantMessage(iterationOutput);
-
-          // If we didn't get a completion signal via a tool call, we'll interpret
-          // a direct response without tool calls on the final iteration as completion
-          if (currentIteration >= this.maxIterations) {
-            isTaskComplete = true;
-            finalOutput = iterationOutput;
-
-            // Add assistant message to context
-            this.context.addAssistantMessage(finalOutput);
-
-            // Add to step record
-            step.output = finalOutput;
-            this.steps.push(step);
-
-            return finalOutput;
-          }
         }
       }
 
@@ -305,8 +261,7 @@ export class Agent {
         'Reached maximum iterations without explicit task completion',
       );
 
-      // Return the final content from the last iteration
-      return finalOutput;
+      return output;
     } catch (error) {
       logger.error({ error }, 'Agent execution error');
       throw error;
@@ -332,38 +287,6 @@ export class Agent {
    */
   getSteps(): AgentStep[] {
     return [...this.steps];
-  }
-
-  /**
-   * Get the final response after tool execution
-   */
-  private async getFinalResponse(): Promise<string> {
-    try {
-      // Get the current conversation for the prompt
-      const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
-
-      // Send the request to OpenAI
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages,
-      });
-
-      // Extract the response content
-      const output = response.choices[0].message.content || '';
-
-      // Add assistant message to context
-      this.context.addAssistantMessage(output);
-
-      // Update the last step with the final output
-      if (this.steps.length > 0) {
-        this.steps[this.steps.length - 1].output = output;
-      }
-
-      return output;
-    } catch (error) {
-      logger.error({ error }, 'Failed to get final response');
-      throw error;
-    }
   }
 
   /**

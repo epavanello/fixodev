@@ -3,7 +3,7 @@ import { envConfig } from '../config/env';
 import { logger } from '../config/logger';
 
 // Initialize OpenAI client
-const openai = new OpenAI({
+export const openai = new OpenAI({
   apiKey: envConfig.OPENAI_API_KEY,
 });
 
@@ -43,6 +43,3 @@ export const generateCompletion = async (
     throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
-
-// Export OpenAI client
-export { openai };

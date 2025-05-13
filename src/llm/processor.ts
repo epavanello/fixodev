@@ -1,9 +1,7 @@
-import { OpenAI } from 'openai';
 import {
   ChatCompletionSystemMessageParam,
   ChatCompletionUserMessageParam,
 } from 'openai/resources/chat/completions/completions';
-import { envConfig } from '../config/env';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { Agent } from './agent';
@@ -16,11 +14,15 @@ import {
 import { createGrepTool, createFindFilesTool } from './tools/search';
 import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: envConfig.OPENAI_API_KEY,
-});
+import { openai } from './client';
+import {
+  createRepositoryAnalysisTool,
+  RepositoryAnalysis,
+  createFixCodeTool,
+  createFixLintingTool,
+  createFixTestsTool,
+  FixedCode,
+} from './tools/registry';
 
 export interface CodeContext {
   filePath?: string;
@@ -31,16 +33,6 @@ export interface CodeContext {
   projectType?: string;
   command?: string;
   repositoryPath?: string;
-}
-
-interface CodeChange {
-  filePath: string;
-  description: string;
-  dependencies?: string[];
-}
-
-interface RepositoryAnalysis {
-  changes: CodeChange[];
 }
 
 /**
@@ -87,48 +79,27 @@ export const analyzeCode = async (context: CodeContext): Promise<RepositoryAnaly
     const agent = createRepositoryAgent(context.repositoryPath, context);
 
     // Run the agent with the command
-    const response = await agent.run(`
+    const response = await agent.run(
+      `
       I need you to analyze this repository and suggest changes based on the following request:
       "${context.command}"
       
       First, explore the repository structure to understand what we're working with.
       Then, identify the files that need to be modified to implement the requested changes.
       
-      Return your analysis in JSON format with the following structure:
+      Use the repositoryAnalysis tool to return your analysis results.
+    `,
       {
-        "changes": [
-          {
-            "filePath": "path/to/file",
-            "description": "What changes are needed",
-            "dependencies": ["dependency1", "dependency2"] // optional
-          }
-        ]
-      }
-    `);
+        outputTool: createRepositoryAnalysisTool(),
+      },
+    );
 
-    // Parse the response to extract the changes
-    const jsonMatch =
-      response.match(/```json\n([\s\S]*?)\n```/) ||
-      response.match(/```\n([\s\S]*?)\n```/) ||
-      response.match(/\{[\s\S]*"changes"[\s\S]*\}/);
-
-    let result: RepositoryAnalysis;
-
-    if (jsonMatch) {
-      try {
-        result = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-      } catch (error) {
-        logger.error({ response, error }, 'Failed to parse JSON from response');
-        result = { changes: [] };
-      }
-    } else {
-      logger.warn({ response }, 'Could not extract JSON from response');
-      result = { changes: [] };
+    if (!response) {
+      throw new Error('No response from agent');
     }
 
-    logger.info({ command: context.command }, 'Repository analysis completed');
-
-    return result;
+    // The response will be the result from the repositoryAnalysis tool
+    return response;
   } catch (error) {
     logger.error({ command: context.command, error }, 'Failed to analyze repository');
     throw new GitHubError(
@@ -188,7 +159,8 @@ Please provide only the corrected code with no explanations. The code should be 
     const agent = createRepositoryAgent(context.repositoryPath, context);
 
     // Run the agent with the issue and code
-    const response = await agent.run(`
+    const response = await agent.run(
+      `
       I need you to fix an issue in the following code:
       
       File: ${context.filePath || 'unknown'}
@@ -199,21 +171,20 @@ Please provide only the corrected code with no explanations. The code should be 
       ${code}
       \`\`\`
       
-      Please analyze the issue and provide only the corrected code with no explanations.
+      Please analyze the issue and provide the corrected code using the fixCode tool.
       The code should be complete and ready to use.
-    `);
+    `,
+      {
+        outputTool: createFixCodeTool(),
+      },
+    );
 
-    // Extract the code from the response
-    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)\n```/);
-
-    if (codeMatch) {
-      logger.info({ filePath: context.filePath }, 'Code fix completed');
-      return codeMatch[1];
-    } else {
-      // If no code block found, use the response as is
-      logger.info({ filePath: context.filePath }, 'Code fix completed (no code block found)');
-      return response;
+    if (!response) {
+      throw new Error('No response from agent');
     }
+
+    // The response will be the result from the fixCode tool
+    return (response as FixedCode).code;
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix code');
     throw new GitHubError(
@@ -273,7 +244,8 @@ Please provide only the corrected code with no explanations.`;
     const agent = createRepositoryAgent(context.repositoryPath, context);
 
     // Run the agent with the lint errors and code
-    const response = await agent.run(`
+    const response = await agent.run(
+      `
       I need you to fix the following linting issues in the code:
       
       File: ${context.filePath || 'unknown'}
@@ -286,21 +258,20 @@ Please provide only the corrected code with no explanations.`;
       ${code}
       \`\`\`
       
-      Please analyze the issues and provide only the corrected code with no explanations.
+      Please analyze the issues and provide the corrected code using the fixLinting tool.
       The code should be complete and ready to use.
-    `);
+    `,
+      {
+        outputTool: createFixLintingTool(),
+      },
+    );
 
-    // Extract the code from the response
-    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)\n```/);
-
-    if (codeMatch) {
-      logger.info({ filePath: context.filePath }, 'Linting fix completed');
-      return codeMatch[1];
-    } else {
-      // If no code block found, use the response as is
-      logger.info({ filePath: context.filePath }, 'Linting fix completed (no code block found)');
-      return response;
+    if (!response) {
+      throw new Error('No response from agent');
     }
+
+    // The response will be the result from the fixLinting tool
+    return (response as FixedCode).code;
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix linting issues');
     throw new GitHubError(
@@ -360,7 +331,8 @@ Please provide only the corrected code with no explanations.`;
     const agent = createRepositoryAgent(context.repositoryPath, context);
 
     // Run the agent with the test failures and code
-    const response = await agent.run(`
+    const response = await agent.run(
+      `
       I need you to fix the following test failures:
       
       File: ${context.filePath || 'unknown'}
@@ -373,21 +345,20 @@ Please provide only the corrected code with no explanations.`;
       ${code}
       \`\`\`
       
-      Please analyze the test failures and provide only the corrected code with no explanations.
+      Please analyze the test failures and provide the corrected code using the fixTests tool.
       The code should be complete and ready to use.
-    `);
+    `,
+      {
+        outputTool: createFixTestsTool(),
+      },
+    );
 
-    // Extract the code from the response
-    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)\n```/);
-
-    if (codeMatch) {
-      logger.info({ filePath: context.filePath }, 'Test fix completed');
-      return codeMatch[1];
-    } else {
-      // If no code block found, use the response as is
-      logger.info({ filePath: context.filePath }, 'Test fix completed (no code block found)');
-      return response;
+    if (!response) {
+      throw new Error('No response from agent');
     }
+
+    // The response will be the result from the fixTests tool
+    return (response as FixedCode).code;
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix test failures');
     throw new GitHubError(
