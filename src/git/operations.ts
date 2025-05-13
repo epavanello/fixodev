@@ -1,6 +1,7 @@
 import { SimpleGit } from 'simple-git';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
+import { envConfig } from '../config/env';
 
 /**
  * Create a new branch and switch to it
@@ -33,6 +34,10 @@ export const createBranch = async (git: SimpleGit, branchName: string): Promise<
 export const commitChanges = async (git: SimpleGit, message: string): Promise<void> => {
   try {
     logger.info('Committing changes');
+
+    // Configure Git identity for the GitHub App
+    await git.addConfig('user.name', envConfig.GIT_BOT_USERNAME);
+    await git.addConfig('user.email', envConfig.GIT_BOT_EMAIL);
 
     // Stage all changes
     await git.add('.');

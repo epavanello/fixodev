@@ -10,6 +10,10 @@ const envSchema = z.object({
   GITHUB_PRIVATE_KEY: z.string().min(1, 'GITHUB_PRIVATE_KEY is required'),
   GITHUB_WEBHOOK_SECRET: z.string().min(1, 'GITHUB_WEBHOOK_SECRET is required'),
 
+  // Git Bot Identity
+  GIT_BOT_USERNAME: z.string().default('RepoSister Bot'),
+  GIT_BOT_EMAIL: z.string().default('bot@repositer.ai'),
+
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
 
