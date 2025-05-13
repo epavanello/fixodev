@@ -1,4 +1,4 @@
-FROM oven/bun:1
+FROM oven/bun:1.2
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN bun install --production --no-optional
 
 # Copy application code
 COPY . .
-RUN bun run build
+RUN bun run build --sourcemap
 
 # Create data directories
 RUN mkdir -p data repos
