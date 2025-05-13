@@ -110,7 +110,7 @@ router.post('/github', async c => {
 
         // Create job for processing with full context
         const job = jobQueue.addJob({
-          repositoryUrl: payload.repository.url,
+          repositoryUrl: payload.repository.clone_url,
           installationId: payload.installation.id,
           eventType: event,
           payload: webhookEvent,
