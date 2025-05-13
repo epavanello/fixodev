@@ -22,6 +22,7 @@ import {
   isIssueCommentEvent,
   isPullRequestReviewCommentEvent,
 } from '../types/guards';
+import { envConfig } from '../config/env';
 
 /**
  * Process a job from the queue
@@ -165,7 +166,9 @@ export const processJob = async (job: Job): Promise<void> => {
       logger.info({ jobId: job.id }, 'Job completed successfully');
     } finally {
       // Clean up repository
-      await cleanupRepository(repoPath);
+      if (envConfig.CLEANUP_REPOSITORIES) {
+        await cleanupRepository(repoPath);
+      }
     }
   } catch (error) {
     logger.error({ jobId: job.id, error }, 'Job processing failed');

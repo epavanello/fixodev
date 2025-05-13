@@ -27,6 +27,10 @@ const envSchema = z.object({
       return num.toString();
     })
     .default('2'),
+  CLEANUP_REPOSITORIES: z
+    .string()
+    .transform(val => val === 'true')
+    .default('true'),
 
   // Docker
   DOCKER_RUNTIME_PREFIX: z.string().optional(),

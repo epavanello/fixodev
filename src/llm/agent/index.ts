@@ -236,11 +236,13 @@ export class Agent {
         }
       }
 
-      // If we're here, we've hit the max iterations without a completion signal
-      logger.warn(
-        { maxIterations: this.maxIterations },
-        'Reached maximum iterations without explicit task completion',
-      );
+      if (needMoreProcessing) {
+        // If we're here, we've hit the max iterations without a completion signal
+        logger.warn(
+          { maxIterations: this.maxIterations },
+          'Reached maximum iterations without explicit task completion',
+        );
+      }
 
       return output;
     } catch (error) {
