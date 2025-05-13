@@ -1,4 +1,4 @@
-# GitHub Bot
+# RepoSister Bot
 
 A GitHub App-based bot that automates code fixes and improvements through AI.
 
@@ -48,3 +48,4 @@ bun run start
 ## License
 
 MIT
+
