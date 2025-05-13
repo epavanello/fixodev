@@ -2,12 +2,16 @@ FROM oven/bun:1
 
 WORKDIR /app
 
-# Install Docker CLI
-RUN apt-get update && apt-get install -y docker.io curl && rm -rf /var/lib/apt/lists/*
+# Install only essential Docker packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    docker.io \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
+# Install dependencies with specific handling for ssh2
 COPY package*.json ./
-RUN bun install --production
+RUN bun install --production --no-optional
 
 # Copy application code
 COPY . .
