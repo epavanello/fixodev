@@ -1,9 +1,8 @@
 import * as z from 'zod';
-import * as util from 'util';
-import * as child_process from 'child_process';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import fastGlob from 'fast-glob';
 import { createTool } from './types';
-
-const exec = util.promisify(child_process.exec);
 
 /**
  * Create a tool for searching code with regular expressions
@@ -52,69 +51,78 @@ export const createGrepTool = (basePath: string) => {
     schema,
     execute: async params => {
       try {
-        let command = `cd "${basePath}" && grep -n`;
+        // Prepare the glob patterns
+        const baseSearchDirs = params.paths?.length
+          ? params.paths.map(p => path.join(basePath, p))
+          : [basePath];
 
-        if (!params.caseSensitive) {
-          command += ' -i';
+        const allResults: Array<{ filePath: string; lineNumber: number; content: string }> = [];
+
+        // Search in each base directory
+        for (const searchDir of baseSearchDirs) {
+          // Create glob patterns for extensions
+          const patterns: string[] = [];
+
+          if (params.extensions?.length) {
+            for (const ext of params.extensions) {
+              const extension = ext.startsWith('.') ? ext : `.${ext}`;
+              patterns.push(`**/*${extension}`);
+            }
+          } else {
+            patterns.push(`**/*`);
+          }
+
+          // Find all matching files
+          const files = await fastGlob(patterns, {
+            onlyFiles: true,
+            cwd: searchDir,
+          });
+
+          // Create regex for searching file contents
+          const regex = new RegExp(params.pattern, params.caseSensitive ? '' : 'i');
+
+          // Process files and search for matches
+          for (const file of files) {
+            // Check if we've hit the max results
+            if (allResults.length >= params.maxResults) {
+              break;
+            }
+
+            try {
+              const filePath = path.join(searchDir, file);
+              const content = await fs.readFile(filePath, 'utf-8');
+              const lines = content.split('\n');
+
+              for (let i = 0; i < lines.length; i++) {
+                if (regex.test(lines[i])) {
+                  // Convert to relative path from basePath
+                  const relativePath = path.relative(basePath, filePath);
+
+                  allResults.push({
+                    filePath: relativePath,
+                    lineNumber: i + 1, // 1-indexed line numbers
+                    content: lines[i],
+                  });
+
+                  // Check if we've hit the max results
+                  if (allResults.length >= params.maxResults) {
+                    break;
+                  }
+                }
+              }
+            } catch (err) {
+              // Skip files that can't be read
+              continue;
+            }
+          }
+
+          // Check if we've hit the max results
+          if (allResults.length >= params.maxResults) {
+            break;
+          }
         }
 
-        command += ' -r';
-
-        // Add pattern
-        command += ` "${params.pattern.replace(/"/g, '\\"')}"`;
-
-        // Add paths
-        if (params.paths && params.paths.length > 0) {
-          command += ' ' + params.paths.map(p => `"${p.replace(/"/g, '\\"')}"`).join(' ');
-        } else {
-          command += ' .';
-        }
-
-        // Add extensions if specified
-        if (params.extensions && params.extensions.length > 0) {
-          const extensionPattern = params.extensions
-            .map(ext => (ext.startsWith('.') ? `\\${ext}` : `\\.${ext}`))
-            .join('|');
-          command += ` | grep -E "(${extensionPattern})$"`;
-        }
-
-        // Limit results
-        command += ` | head -n ${params.maxResults}`;
-
-        const { stdout, stderr } = await exec(command);
-
-        if (stderr && !stdout) {
-          return { results: [] };
-        }
-
-        // Parse the results
-        const results = stdout
-          .trim()
-          .split('\n')
-          .filter(line => line.trim() !== '')
-          .map(line => {
-            // Format is typically: filename:lineNumber:matchedLine
-            const firstColonIdx = line.indexOf(':');
-            if (firstColonIdx === -1) return null;
-
-            const filePath = line.substring(0, firstColonIdx);
-            const rest = line.substring(firstColonIdx + 1);
-
-            const secondColonIdx = rest.indexOf(':');
-            if (secondColonIdx === -1) return null;
-
-            const lineNumber = parseInt(rest.substring(0, secondColonIdx), 10);
-            const content = rest.substring(secondColonIdx + 1);
-
-            return {
-              filePath,
-              lineNumber,
-              content,
-            };
-          })
-          .filter(Boolean);
-
-        return { results };
+        return { results: allResults };
       } catch (error) {
         return {
           results: [],
@@ -164,32 +172,33 @@ export const createFindFilesTool = (basePath: string) => {
     schema,
     execute: async params => {
       try {
-        let command = `cd "${basePath}" && find "${params.directory}" -type f`;
+        // Prepare search directory
+        const searchDir = path.join(basePath, params.directory);
 
-        if (params.extensions && params.extensions.length > 0) {
-          const extensionPatterns = params.extensions
-            .map(ext => {
-              const extension = ext.startsWith('.') ? ext : `.${ext}`;
-              return `-name "*${extension}"`;
-            })
-            .join(' -o ');
+        // Create glob patterns based on extensions
+        const patterns: string[] = [];
 
-          command += ` \\( ${extensionPatterns} \\)`;
+        if (params.extensions?.length) {
+          for (const ext of params.extensions) {
+            const extension = ext.startsWith('.') ? ext : `.${ext}`;
+            patterns.push(`**/*${extension}`);
+          }
+        } else {
+          patterns.push(`**/*`);
         }
 
-        command += ` | grep -i "${params.pattern.replace(/"/g, '\\"')}"`;
-        command += ` | head -n ${params.maxResults}`;
+        // Find all matching files
+        const allFiles = await fastGlob(patterns, {
+          onlyFiles: true,
+          cwd: searchDir,
+        });
 
-        const { stdout, stderr } = await exec(command);
-
-        if (stderr && !stdout) {
-          return { files: [] };
-        }
-
-        const files = stdout
-          .trim()
-          .split('\n')
-          .filter(line => line.trim() !== '');
+        // Filter by pattern in filename
+        const patternRegex = new RegExp(params.pattern, 'i');
+        const files = allFiles
+          .filter(file => patternRegex.test(path.basename(file)))
+          .slice(0, params.maxResults)
+          .map(file => path.join(params.directory, file));
 
         return { files };
       } catch (error) {

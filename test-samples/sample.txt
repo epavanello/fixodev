@@ -1,0 +1,10 @@
+This is a sample text file.
+It contains multiple lines of text.
+Some lines have specific words like "test" and "sample".
+This file is used for testing the file reading and searching tools.
+Line 5 of the sample file.
+Line 6 with some more content.
+Line 7 with the word "test" again.
+Line 8 with the word "sample" again.
+Line 9 with some final content.
+Line 10 is the last line. 

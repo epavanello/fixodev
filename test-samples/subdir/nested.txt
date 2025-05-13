@@ -1,0 +1,4 @@
+This is a nested file.
+It's located in a subdirectory.
+This helps test directory traversal.
+And file operations in nested paths. 
