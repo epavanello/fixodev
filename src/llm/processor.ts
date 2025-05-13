@@ -47,7 +47,6 @@ const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => 
       taskType: 'feature',
       languages: [context.language || 'unknown'],
     }),
-    verbose: true,
     maxIterations: 15,
   });
 

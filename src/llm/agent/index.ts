@@ -42,11 +42,6 @@ export interface AgentOptions {
   reservedTokens?: number;
 
   /**
-   * Whether to enable verbose logging
-   */
-  verbose?: boolean;
-
-  /**
    * The OpenAI API key to use (defaults to environment variable)
    */
   apiKey?: string;
@@ -79,7 +74,6 @@ export class Agent {
   private context: AgentContext;
   private openai: OpenAI;
   private model: string;
-  private verbose: boolean;
   private basePath: string;
   private steps: AgentStep[] = [];
   private maxIterations: number;
@@ -87,7 +81,6 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.basePath = options.basePath;
     this.model = options.model || 'gpt-4o';
-    this.verbose = options.verbose || false;
     this.maxIterations = options.maxIterations || 5;
 
     // Initialize OpenAI client
@@ -134,35 +127,31 @@ export class Agent {
       let currentIteration = 0;
       let needMoreProcessing = true;
       let output: OUTPUT | undefined;
+
+      // Get available tools as JSON Schema
+      const tools = [...this.context.getToolRegistry().getAllTools(), ...[outputTool]].map(
+        tool => ({
+          type: 'function' as const,
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.getParameterJSONSchema(),
+          },
+        }),
+      );
+
       while (needMoreProcessing && currentIteration < this.maxIterations) {
         currentIteration++;
 
-        if (this.verbose) {
-          logger.debug(
-            { iteration: currentIteration, maxIterations: this.maxIterations },
-            'Starting agent iteration',
-          );
-        }
+        logger.debug(
+          { iteration: currentIteration, maxIterations: this.maxIterations },
+          'Starting agent iteration',
+        );
 
         // Get the current conversation for the prompt
         const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
 
-        // Get available tools as JSON Schema
-        const tools = [...this.context.getToolRegistry().getAllTools(), ...[outputTool]].map(
-          tool => ({
-            type: 'function' as const,
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.getParameterJSONSchema(),
-            },
-          }),
-        );
-
-        // Log request if verbose
-        if (this.verbose) {
-          logger.debug({ messages, tools, iteration: currentIteration }, 'Agent request');
-        }
+        logger.debug({ messages, iteration: currentIteration }, 'Agent request');
 
         // Send the request to OpenAI
         const response = await this.openai.chat.completions.create({
@@ -176,9 +165,7 @@ export class Agent {
         // Extract the response content and tool calls
         const responseMessage = response.choices[0].message;
 
-        if (this.verbose) {
-          logger.debug({ responseMessage, iteration: currentIteration }, 'Agent response');
-        }
+        logger.debug({ responseMessage, iteration: currentIteration }, 'Agent response');
 
         // Set default for this iteration's outcome
         let iterationOutput = responseMessage.content || '';
@@ -203,10 +190,7 @@ export class Agent {
               const toolName = toolCall.function.name;
               const toolArgs = JSON.parse(toolCall.function.arguments);
 
-              // Log tool call if verbose
-              if (this.verbose) {
-                logger.debug({ toolName, toolArgs, iteration: currentIteration }, 'Tool call');
-              }
+              logger.debug({ toolName, toolArgs, iteration: currentIteration }, 'Tool call');
 
               if (toolName === outputTool.name) {
                 needMoreProcessing = false;
@@ -215,10 +199,7 @@ export class Agent {
                 // Execute the tool
                 const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
 
-                // Log tool result if verbose
-                if (this.verbose) {
-                  logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
-                }
+                logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
 
                 // Add tool result to context
                 this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));
