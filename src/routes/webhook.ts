@@ -3,34 +3,39 @@ import { logger } from '../config/logger';
 import { jobQueue } from '../queue';
 import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
-import { GitHubEventType } from '@/types/github';
+import { GitHubEventType } from '../types/github';
+import { WebhookEvent } from '../queue/job';
+import { IssueCommentCreatedEvent } from '@octokit/webhooks-types';
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
   secret: envConfig.GITHUB_WEBHOOK_SECRET,
 });
 
-interface WebhookPayload {
-  action?: string;
-  installation?: {
-    id: number;
-  };
-  repository?: {
-    full_name: string;
-    clone_url: string;
-  };
-  issue?: {
-    number: number;
-  };
-  pull_request?: {
-    number: number;
-  };
-  comment?: {
-    body: string;
-  };
+const BOT_NAME = envConfig.BOT_NAME;
+
+// Type for our processed issue comment payloads, extending Octokit's type
+interface ProcessedIssueCommentPayload extends IssueCommentCreatedEvent {
+  command?: string;
 }
 
 const router = new Hono();
+
+// Check if the bot should respond to this comment
+function shouldProcessComment(commentBody: string): { shouldProcess: boolean; command?: string } {
+  // Check for @reposister mention
+  if (commentBody.includes(`@${BOT_NAME}`)) {
+    // Extract the command/request after the mention
+    const mentionRegex = new RegExp(`@${BOT_NAME}\\s+(.+)`, 'i');
+    const match = commentBody.match(mentionRegex);
+    if (match) {
+      return { shouldProcess: true, command: match[1].trim() };
+    }
+    return { shouldProcess: true }; // Just mentioned without specific command
+  }
+
+  return { shouldProcess: false };
+}
 
 router.post('/github', async c => {
   try {
@@ -51,7 +56,8 @@ router.post('/github', async c => {
       return c.json({ error: 'Invalid webhook signature' }, 400);
     }
 
-    const payload = JSON.parse(rawBody) as WebhookPayload;
+    // Parse payload
+    const payload = JSON.parse(rawBody) as IssueCommentCreatedEvent;
 
     logger.info(
       {
@@ -64,19 +70,61 @@ router.post('/github', async c => {
     );
 
     // Validate required payload fields
-    if (!payload.installation?.id || !payload.repository?.clone_url || !event) {
+    if (!payload.installation?.id || !payload.repository?.url || !event) {
       return c.json({ error: 'Missing required payload fields' }, 400);
     }
 
-    // Create job for processing
-    const job = jobQueue.addJob({
-      repositoryUrl: payload.repository.clone_url,
-      installationId: payload.installation.id,
-      eventType: event,
-      payload,
-    });
+    // Handle issue comments specifically
+    if (
+      event === 'issue_comment' &&
+      payload.action === 'created' &&
+      'comment' in payload &&
+      'issue' in payload
+    ) {
+      const { shouldProcess, command } = shouldProcessComment(payload.comment.body);
 
-    return c.json({ success: true, jobId: job.id });
+      if (shouldProcess) {
+        logger.info(
+          {
+            command,
+            issueNumber: payload.issue.number,
+            issueTitle: payload.issue.title,
+            repository: payload.repository.full_name,
+            commenter: payload.comment.user.login,
+          },
+          'Processing @reposister command from comment',
+        );
+
+        // Create enhanced payload with command
+        const enhancedPayload: ProcessedIssueCommentPayload = {
+          ...payload,
+          command,
+        };
+
+        // Create webhook event object with ID and enhanced payload
+        const webhookEvent: WebhookEvent<ProcessedIssueCommentPayload> = {
+          id: deliveryId || `event-${Date.now()}`,
+          name: 'issue_comment',
+          payload: enhancedPayload,
+        };
+
+        // Create job for processing with full context
+        const job = jobQueue.addJob({
+          repositoryUrl: payload.repository.url,
+          installationId: payload.installation.id,
+          eventType: event,
+          payload: webhookEvent,
+        });
+
+        return c.json({ success: true, jobId: job.id });
+      } else {
+        logger.debug('Comment does not contain @reposister mention, ignoring');
+        return c.json({ success: true, processed: false });
+      }
+    }
+
+    // For other events, just acknowledge receipt
+    return c.json({ success: true, processed: false });
   } catch (error) {
     logger.error({ error }, 'Error processing webhook');
     return c.json({ error: 'Internal Server Error' }, 500);

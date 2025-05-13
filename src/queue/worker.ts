@@ -50,18 +50,14 @@ export const processJob = async (job: Job): Promise<void> => {
       await createBranch(git, branchName);
 
       // Implement requested changes using LLM
-      if (isIssueCommentEvent(job.payload) || isPullRequestReviewCommentEvent(job.payload)) {
-        logger.info({ jobId: job.id }, 'Implementing requested changes');
-        const commentBody = job.payload.comment.body;
-
-        // Let LLM analyze the repository and implement changes
+      if (isIssueCommentEvent(job.payload.payload)) {
+        logger.info({ jobId: job.id }, 'Implementing requested changes for IssueCommentEvent');
+        const commentBody = job.payload.payload.comment.body;
         const analysis = await analyzeCode({
           command: commentBody,
           repositoryPath: repoPath,
           language: config.runtime,
         });
-
-        // Apply the suggested changes
         for (const change of analysis.changes) {
           const fileContent = await readFile(join(repoPath, change.filePath), 'utf8');
           const fixedCode = await fixCode(fileContent, change.description, {
@@ -69,7 +65,29 @@ export const processJob = async (job: Job): Promise<void> => {
             language: getFileLanguage(change.filePath),
             dependencies: change.dependencies,
           });
-
+          if (fixedCode) {
+            await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');
+            logger.info({ jobId: job.id, file: change.filePath }, 'Applied requested changes');
+          }
+        }
+      } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
+        logger.info(
+          { jobId: job.id },
+          'Implementing requested changes for PullRequestReviewCommentEvent',
+        );
+        const commentBody = job.payload.payload.comment.body;
+        const analysis = await analyzeCode({
+          command: commentBody,
+          repositoryPath: repoPath,
+          language: config.runtime,
+        });
+        for (const change of analysis.changes) {
+          const fileContent = await readFile(join(repoPath, change.filePath), 'utf8');
+          const fixedCode = await fixCode(fileContent, change.description, {
+            filePath: change.filePath,
+            language: getFileLanguage(change.filePath),
+            dependencies: change.dependencies,
+          });
           if (fixedCode) {
             await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');
             logger.info({ jobId: job.id, file: change.filePath }, 'Applied requested changes');
@@ -134,28 +152,56 @@ export const processJob = async (job: Job): Promise<void> => {
       await pushChanges(git, branchName);
 
       // Create pull request
-      const issueNumber = isIssueEvent(job.payload)
-        ? job.payload.issue.number
-        : isPullRequestEvent(job.payload)
-          ? job.payload.pull_request.number
-          : undefined;
+      let issueNumber: number | undefined;
+      let commentBodyForPR: string | undefined;
+      let prAction: string = '';
+      let repoOwner: string = '';
+      let repoName: string = '';
 
-      const commentBody = isIssueCommentEvent(job.payload)
-        ? job.payload.comment.body
-        : isPullRequestReviewCommentEvent(job.payload)
-          ? job.payload.comment.body
-          : undefined;
+      if (isIssueEvent(job.payload.payload)) {
+        issueNumber = job.payload.payload.issue.number;
+        prAction = job.payload.payload.action;
+        repoOwner = job.payload.payload.repository.owner.login;
+        repoName = job.payload.payload.repository.name;
+      } else if (isPullRequestEvent(job.payload.payload)) {
+        issueNumber = job.payload.payload.pull_request.number;
+        prAction = job.payload.payload.action;
+        repoOwner = job.payload.payload.repository.owner.login;
+        repoName = job.payload.payload.repository.name;
+      }
+
+      if (isIssueCommentEvent(job.payload.payload)) {
+        commentBodyForPR = job.payload.payload.comment.body;
+        if (!prAction) prAction = job.payload.payload.action;
+        if (!repoOwner) repoOwner = job.payload.payload.repository.owner.login;
+        if (!repoName) repoName = job.payload.payload.repository.name;
+        if (!issueNumber) issueNumber = job.payload.payload.issue.number;
+      } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
+        commentBodyForPR = job.payload.payload.comment.body;
+        if (!prAction) prAction = job.payload.payload.action;
+        if (!repoOwner) repoOwner = job.payload.payload.repository.owner.login;
+        if (!repoName) repoName = job.payload.payload.repository.name;
+        if (!issueNumber) issueNumber = job.payload.payload.pull_request.number;
+      }
+
+      if (!repoOwner || !repoName) {
+        logger.error(
+          { jobId: job.id, payload: job.payload.payload },
+          'Could not determine repository owner or name from payload',
+        );
+        throw new JobError('Could not determine repository owner or name from payload');
+      }
 
       const { title, body } = generatePRContent(
         job.eventType,
-        job.payload.action || '',
+        prAction,
         issueNumber,
-        commentBody,
+        commentBodyForPR,
       );
 
       await createPullRequest(octokit, {
-        owner: job.payload.repository.owner.login,
-        repo: job.payload.repository.name,
+        owner: repoOwner,
+        repo: repoName,
         title,
         head: branchName,
         base: config.branches.target,
