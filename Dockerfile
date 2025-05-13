@@ -7,7 +7,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     docker.io \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Install dependencies with specific handling for ssh2
 COPY package*.json ./
