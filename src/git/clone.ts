@@ -13,6 +13,7 @@ const REPOS_DIR = join(process.cwd(), 'repos');
 export const cloneRepository = async (
   repoUrl: string,
   branch?: string,
+  token?: string,
 ): Promise<{ path: string; git: SimpleGit }> => {
   try {
     // Create repos directory if it doesn't exist
@@ -36,8 +37,16 @@ export const cloneRepository = async (
       options.push('--branch', branch);
     }
 
+    // Use authentication if token is provided
+    let repoUrlWithAuth = repoUrl;
+    if (token) {
+      // Convert https://github.com/user/repo.git to https://x-access-token:TOKEN@github.com/user/repo.git
+      repoUrlWithAuth = repoUrl.replace('https://', `https://x-access-token:${token}@`);
+      logger.info({ repoUrl }, 'Using authenticated URL for private repository');
+    }
+
     // Clone repository
-    await git.clone(repoUrl, cloneDir, options);
+    await git.clone(repoUrlWithAuth, cloneDir, options);
 
     // Change working directory
     const localGit = simpleGit(cloneDir);

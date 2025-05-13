@@ -56,6 +56,31 @@ export class GitHubApp {
   }
 
   /**
+   * Get an installation token for Git operations
+   */
+  public async getInstallationToken(installationId: number): Promise<string> {
+    try {
+      logger.info({ installationId }, 'Getting installation token for Git operations');
+
+      // Get installation token
+      const { token } = await this.auth({
+        type: 'installation',
+        installationId,
+      });
+
+      return token;
+    } catch (error) {
+      logger.error(
+        { installationId, error },
+        'Failed to get installation token for Git operations',
+      );
+      throw new GitHubError(
+        `Failed to get installation token: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
    * Get a JWT for GitHub App authentication
    */
   public async getJWT(): Promise<string> {

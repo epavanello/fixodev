@@ -34,8 +34,11 @@ export const processJob = async (job: Job): Promise<void> => {
     const githubApp = new GitHubApp();
     const octokit = await githubApp.getAuthenticatedClient(job.installationId);
 
-    // Clone repository
-    const { path: repoPath, git } = await cloneRepository(job.repositoryUrl);
+    // Get installation token for Git operations
+    const token = await githubApp.getInstallationToken(job.installationId);
+
+    // Clone repository with authentication
+    const { path: repoPath, git } = await cloneRepository(job.repositoryUrl, undefined, token);
 
     try {
       // Load bot configuration
