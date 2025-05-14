@@ -56,4 +56,4 @@ bun run start
 
 ## License
 
-MIT
+Business Source License 1.1 (BSL 1.1)
