@@ -17,6 +17,14 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 4. Start the development server: `bun run dev`
 5. Run the CLI: `bun run cli`
 
+## Environment Variables
+
+| Variable         | Description |
+|-------------------|-------------|
+| EXAMPLE_VARIABLE_1 | Description for example variable 1 |
+| EXAMPLE_VARIABLE_2 | Description for example variable 2 |
+| EXAMPLE_VARIABLE_3 | Description for example variable 3 |
+
 ## Architecture
 
 - Bun HTTP server for webhook handling
