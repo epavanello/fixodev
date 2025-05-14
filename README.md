@@ -15,6 +15,7 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 2. Install dependencies: `bun install`
 3. Copy `env.example` to `.env` and fill in the required values
 4. Start the development server: `bun run dev`
+5. Run the CLI: `bun run cli`
 
 ## Architecture
 
@@ -32,6 +33,9 @@ bun install
 # Start development server
 bun run dev
 
+# Run the CLI
+bun run cli
+
 # Lint code
 bun run lint
 
@@ -48,4 +52,3 @@ bun run start
 ## License
 
 MIT
-
