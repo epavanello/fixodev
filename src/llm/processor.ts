@@ -145,6 +145,7 @@ You MUST use the "${fixCodeTool.name}" tool to return the corrected code. Do not
         model: 'gpt-4o-mini', // Or a model from context if appropriate
         systemMessage: `You are a professional developer. Your task is to fix the provided code snippet. You MUST use the tool named "${fixCodeTool.name}" to return the corrected code. Do not provide explanations outside of the tool.`,
         maxIterations: 3,
+        history: context.history,
       });
 
       // Run the agent with the issue and code
