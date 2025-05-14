@@ -1,7 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
-
 interface CreatePRParams {
   owner: string;
   repo: string;
@@ -84,33 +83,4 @@ export const createPullRequest = async (
       `Failed to create pull request: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-};
-
-/**
- * Generate PR title and body based on the changes
- */
-export const generatePRContent = (
-  eventType: string,
-  action: string,
-  issueNumber?: number,
-  commentBody?: string,
-): { title: string; body: string } => {
-  let title: string;
-  let body: string;
-
-  switch (eventType) {
-    case 'issue_comment':
-      title = `Fix: ${commentBody?.slice(0, 50)}${commentBody && commentBody.length > 50 ? '...' : ''}`;
-      body = `This PR addresses the issue mentioned in #${issueNumber}.\n\n${commentBody}`;
-      break;
-    case 'pull_request':
-      title = `Fix: Automated fixes for PR #${issueNumber}`;
-      body = `This PR contains automated fixes for PR #${issueNumber}.`;
-      break;
-    default:
-      title = 'Fix: Automated code improvements';
-      body = 'This PR contains automated code improvements.';
-  }
-
-  return { title, body };
 };

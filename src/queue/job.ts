@@ -1,16 +1,9 @@
 import { GitHubEventType } from '../types/github';
 import { Schema } from '@octokit/webhooks-types';
 
-// Definizione di base del tipo di payload per gli eventi GitHub
-// export interface GitHubEventPayload {
-//   [key: string]: any; // Consente campi dinamici per diversi tipi di eventi
-// }
-// Replaced by Octokit's Schema or specific event payloads
-
-// Definizione del webhook event con tipizzazione per il nostro uso
 export interface WebhookEvent<T extends Schema = Schema> {
   id: string;
-  name: GitHubEventType; // Use GitHubEventType for the name
+  name: GitHubEventType;
   payload: T;
 }
 
@@ -21,7 +14,7 @@ export interface Job<T extends Schema = Schema> {
   repositoryUrl: string;
   installationId: number;
   eventType: GitHubEventType;
-  event: WebhookEvent<T>; // Use the generic WebhookEvent
+  event: WebhookEvent<T>;
   status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -33,7 +26,7 @@ export interface JobCreateParams<T extends Schema = Schema> {
   repositoryUrl: string;
   installationId: number;
   eventType: GitHubEventType;
-  event: WebhookEvent<T>; // Use the generic WebhookEvent
+  event: WebhookEvent<T>;
 }
 
 export const createJob = <T extends Schema = Schema>(params: JobCreateParams<T>): Job<T> => {
