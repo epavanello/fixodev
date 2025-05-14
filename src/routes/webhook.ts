@@ -5,7 +5,7 @@ import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
 import { GitHubEventType } from '../types/github';
 import { WebhookEvent } from '../queue/job';
-import { IssueCommentCreatedEvent } from '@octokit/webhooks-types';
+import { IssueCommentCreatedEvent, IssuesOpenedEvent } from '@octokit/webhooks-types';
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
@@ -19,14 +19,20 @@ interface ProcessedIssueCommentPayload extends IssueCommentCreatedEvent {
   command?: string;
 }
 
+// Define a similar type for issue events
+interface ProcessedIssuePayload extends IssuesOpenedEvent {
+  command?: string;
+}
+
 const router = new Hono();
 
+const botName = `@${envConfig.BOT_NAME}`;
 // Check if the bot should respond to this comment
 function shouldProcessComment(commentBody: string): { shouldProcess: boolean; command?: string } {
-  // Check for @reposister mention
-  if (commentBody.includes(`@${BOT_NAME}`)) {
+  // Check for @bot mention
+  if (commentBody.includes(botName)) {
     // Extract the command/request after the mention
-    const mentionRegex = new RegExp(`@${BOT_NAME}\\s+(.+)`, 'i');
+    const mentionRegex = new RegExp(`${botName}[ \t\r\n\f\v]+(.+)`, 'i');
     const match = commentBody.match(mentionRegex);
     if (match) {
       return { shouldProcess: true, command: match[1].trim() };
@@ -35,6 +41,40 @@ function shouldProcessComment(commentBody: string): { shouldProcess: boolean; co
   }
 
   return { shouldProcess: false };
+}
+
+// Helper function to create WebhookEvent and add job to the queue
+function createAndQueueJob<P extends ProcessedIssueCommentPayload | ProcessedIssuePayload>(params: {
+  repositoryUrl: string;
+  installationId: number;
+  githubEventType: GitHubEventType; // From X-GitHub-Event header
+  webhookEventNameForQueue: P extends ProcessedIssueCommentPayload ? 'issue_comment' : 'issues'; // For WebhookEvent.name
+  enhancedPayload: P;
+  deliveryId: string | undefined;
+}): { id: string } {
+  const {
+    repositoryUrl,
+    installationId,
+    githubEventType,
+    webhookEventNameForQueue,
+    enhancedPayload,
+    deliveryId,
+  } = params;
+
+  const webhookEvent: WebhookEvent<P> = {
+    id: deliveryId || `event-${Date.now()}`,
+    name: webhookEventNameForQueue,
+    payload: enhancedPayload,
+  };
+
+  const job = jobQueue.addJob({
+    repositoryUrl,
+    installationId,
+    eventType: githubEventType,
+    payload: webhookEvent,
+  });
+
+  return job;
 }
 
 router.post('/github', async c => {
@@ -57,7 +97,7 @@ router.post('/github', async c => {
     }
 
     // Parse payload
-    const payload = JSON.parse(rawBody) as IssueCommentCreatedEvent;
+    const payload = JSON.parse(rawBody) as IssueCommentCreatedEvent | IssuesOpenedEvent;
 
     logger.info(
       {
@@ -79,46 +119,88 @@ router.post('/github', async c => {
       event === 'issue_comment' &&
       payload.action === 'created' &&
       'comment' in payload &&
-      'issue' in payload
+      'issue' in payload &&
+      (payload as IssueCommentCreatedEvent).comment // Type assertion
     ) {
-      const { shouldProcess, command } = shouldProcessComment(payload.comment.body);
+      const commentPayload = payload as IssueCommentCreatedEvent; // Narrow down type
+      const { shouldProcess, command } = shouldProcessComment(commentPayload.comment.body);
 
       if (shouldProcess) {
         logger.info(
           {
             command,
-            issueNumber: payload.issue.number,
-            issueTitle: payload.issue.title,
-            repository: payload.repository.full_name,
-            commenter: payload.comment.user.login,
+            issueNumber: commentPayload.issue.number,
+            issueTitle: commentPayload.issue.title,
+            repository: commentPayload.repository.full_name,
+            commenter: commentPayload.comment.user.login,
           },
-          'Processing @reposister command from comment',
+          `Processing ${botName} command from comment`,
         );
 
         // Create enhanced payload with command
         const enhancedPayload: ProcessedIssueCommentPayload = {
-          ...payload,
+          ...commentPayload,
           command,
         };
 
-        // Create webhook event object with ID and enhanced payload
-        const webhookEvent: WebhookEvent<ProcessedIssueCommentPayload> = {
-          id: deliveryId || `event-${Date.now()}`,
-          name: 'issue_comment',
-          payload: enhancedPayload,
-        };
-
         // Create job for processing with full context
-        const job = jobQueue.addJob({
-          repositoryUrl: payload.repository.clone_url,
-          installationId: payload.installation.id,
-          eventType: event,
-          payload: webhookEvent,
+        const job = createAndQueueJob({
+          repositoryUrl: commentPayload.repository.clone_url,
+          installationId: commentPayload.installation!.id,
+          githubEventType: event,
+          webhookEventNameForQueue: 'issue_comment',
+          enhancedPayload,
+          deliveryId,
         });
 
         return c.json({ success: true, jobId: job.id });
       } else {
-        logger.debug('Comment does not contain @reposister mention, ignoring');
+        logger.debug(`Comment does not contain ${botName} mention, ignoring`);
+        return c.json({ success: true, processed: false });
+      }
+    }
+
+    // Handle issue creation
+    if (
+      event === 'issues' &&
+      payload.action === 'opened' &&
+      'issue' in payload &&
+      (payload as IssuesOpenedEvent).issue.body // Type assertion and ensure issue body exists
+    ) {
+      const issuePayload = payload as IssuesOpenedEvent; // Narrow down type
+      const { shouldProcess, command } = shouldProcessComment(issuePayload.issue.body!); // Add non-null assertion for issue body
+
+      if (shouldProcess) {
+        logger.info(
+          {
+            command,
+            issueNumber: issuePayload.issue.number,
+            issueTitle: issuePayload.issue.title,
+            repository: issuePayload.repository.full_name,
+            opener: issuePayload.issue.user.login,
+          },
+          `Processing ${botName} command from new issue body`,
+        );
+
+        // Create enhanced payload with command
+        const enhancedPayload: ProcessedIssuePayload = {
+          ...issuePayload,
+          command,
+        };
+
+        // Create job for processing with full context
+        const job = createAndQueueJob({
+          repositoryUrl: issuePayload.repository.clone_url,
+          installationId: issuePayload.installation!.id,
+          githubEventType: event,
+          webhookEventNameForQueue: 'issues',
+          enhancedPayload,
+          deliveryId,
+        });
+
+        return c.json({ success: true, jobId: job.id });
+      } else {
+        logger.debug(`New issue does not contain ${botName} mention, ignoring`);
         return c.json({ success: true, processed: false });
       }
     }
