@@ -139,7 +139,6 @@ export const processJob = async (job: Job): Promise<void> => {
         jobId: job.id,
         eventType: job.eventType,
         eventName: job.event.name,
-        action: (job.event.payload as any)?.action,
       },
       'Job event type or action not configured for processing in worker. Skipping.',
     );
