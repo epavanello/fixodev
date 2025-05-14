@@ -1,5 +1,6 @@
 import { Job } from './job';
 import { logger } from '../config/logger';
+import pino from 'pino';
 import { cloneRepository, cleanupRepository } from '../git/clone';
 import { createBranch, commitChanges, pushChanges } from '../git/operations';
 import { createPullRequest, generatePRContent } from '../github/pr';
@@ -25,77 +26,140 @@ import {
 import { envConfig } from '../config/env';
 
 /**
+ * Helper function to apply changes based on a comment.
+ * Returns true if changes were made, false otherwise.
+ */
+async function applyChangesFromComment(
+  commentBody: string,
+  repoPath: string,
+  config: BotConfig,
+  jobId: string,
+  loggerInstance: pino.Logger,
+): Promise<boolean> {
+  loggerInstance.info({ jobId }, 'Analyzing comment for changes');
+  const analysis = await analyzeCode({
+    command: commentBody,
+    repositoryPath: repoPath,
+    language: config.runtime,
+  });
+
+  let filesChanged = false;
+  if (analysis.changes && analysis.changes.length > 0) {
+    for (const change of analysis.changes) {
+      const fileContent = await readFile(join(repoPath, change.filePath), 'utf8');
+      const fixedCode = await fixCode(fileContent, change.description, {
+        filePath: change.filePath,
+        language: getFileLanguage(change.filePath),
+        dependencies: change.dependencies,
+      });
+      if (fixedCode) {
+        await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');
+        loggerInstance.info(
+          { jobId, file: change.filePath },
+          'Applied requested changes from comment',
+        );
+        filesChanged = true;
+      }
+    }
+  } else {
+    loggerInstance.info({ jobId }, 'No changes to apply from comment analysis');
+  }
+  return filesChanged;
+}
+
+/**
  * Process a job from the queue
  */
 export const processJob = async (job: Job): Promise<void> => {
   try {
     logger.info({ jobId: job.id }, 'Starting job processing');
 
-    // Initialize GitHub App for API access
     const githubApp = new GitHubApp();
     const octokit = await githubApp.getAuthenticatedClient(job.installationId);
-
-    // Get installation token for Git operations
     const token = await githubApp.getInstallationToken(job.installationId);
-
-    // Clone repository with authentication
     const { path: repoPath, git } = await cloneRepository(job.repositoryUrl, undefined, token);
 
     try {
-      // Load bot configuration
       const config = (await loadBotConfig(repoPath)) as BotConfig;
-
-      // Create branch for changes
       const branchName = `job-${job.id}`;
       await createBranch(git, branchName);
 
-      // Implement requested changes using LLM
+      let repoOwner: string | undefined;
+      let repoName: string | undefined;
+
+      interface OriginalCommentContext {
+        owner: string;
+        repo: string;
+        numberForReply: number;
+        isCommentEvent: boolean;
+      }
+      let originalCommentContext: OriginalCommentContext | undefined;
+
+      if (
+        isIssueEvent(job.payload.payload) ||
+        isPullRequestEvent(job.payload.payload) ||
+        isIssueCommentEvent(job.payload.payload) ||
+        isPullRequestReviewCommentEvent(job.payload.payload)
+      ) {
+        repoOwner = job.payload.payload.repository.owner.login;
+        repoName = job.payload.payload.repository.name;
+      } else {
+        logger.error(
+          { jobId: job.id, payload: job.payload.payload },
+          'Could not determine repository owner or name from payload. Cannot proceed.',
+        );
+        throw new JobError(
+          'Could not determine repository owner or name from payload. Cannot proceed.',
+        );
+      }
+
+      if (!repoOwner || !repoName) {
+        logger.error(
+          { jobId: job.id, payload: job.payload.payload },
+          'Could not determine repository owner or name from payload. Cannot proceed.',
+        );
+        throw new JobError(
+          'Could not determine repository owner or name from payload. Cannot proceed.',
+        );
+      }
+
       if (isIssueCommentEvent(job.payload.payload)) {
+        const commentPayload = job.payload.payload;
         logger.info({ jobId: job.id }, 'Implementing requested changes for IssueCommentEvent');
-        const commentBody = job.payload.payload.comment.body;
-        const analysis = await analyzeCode({
-          command: commentBody,
-          repositoryPath: repoPath,
-          language: config.runtime,
-        });
-        for (const change of analysis.changes) {
-          const fileContent = await readFile(join(repoPath, change.filePath), 'utf8');
-          const fixedCode = await fixCode(fileContent, change.description, {
-            filePath: change.filePath,
-            language: getFileLanguage(change.filePath),
-            dependencies: change.dependencies,
-          });
-          if (fixedCode) {
-            await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');
-            logger.info({ jobId: job.id, file: change.filePath }, 'Applied requested changes');
-          }
-        }
+        originalCommentContext = {
+          owner: repoOwner,
+          repo: repoName,
+          numberForReply: commentPayload.issue.number,
+          isCommentEvent: true,
+        };
+        await applyChangesFromComment(
+          commentPayload.comment.body,
+          repoPath,
+          config,
+          job.id,
+          logger,
+        );
       } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
+        const commentPayload = job.payload.payload;
         logger.info(
           { jobId: job.id },
           'Implementing requested changes for PullRequestReviewCommentEvent',
         );
-        const commentBody = job.payload.payload.comment.body;
-        const analysis = await analyzeCode({
-          command: commentBody,
-          repositoryPath: repoPath,
-          language: config.runtime,
-        });
-        for (const change of analysis.changes) {
-          const fileContent = await readFile(join(repoPath, change.filePath), 'utf8');
-          const fixedCode = await fixCode(fileContent, change.description, {
-            filePath: change.filePath,
-            language: getFileLanguage(change.filePath),
-            dependencies: change.dependencies,
-          });
-          if (fixedCode) {
-            await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');
-            logger.info({ jobId: job.id, file: change.filePath }, 'Applied requested changes');
-          }
-        }
+        originalCommentContext = {
+          owner: repoOwner,
+          repo: repoName,
+          numberForReply: commentPayload.pull_request.number,
+          isCommentEvent: true,
+        };
+        await applyChangesFromComment(
+          commentPayload.comment.body,
+          repoPath,
+          config,
+          job.id,
+          logger,
+        );
       }
 
-      // Run linting if configured
       if (config.scripts.lint) {
         logger.info({ jobId: job.id }, 'Running linting');
         const lintResult = await executeCommand({
@@ -105,18 +169,16 @@ export const processJob = async (job: Job): Promise<void> => {
         });
 
         if (!lintResult.success) {
-          // Fix linting issues using LLM
           const fixedFiles = await fixLinting(lintResult.output, repoPath, config);
           if (fixedFiles.length > 0) {
-            // Apply fixed code to files
             for (const { filePath, fixedCode } of fixedFiles) {
               await writeFile(join(repoPath, filePath), fixedCode, 'utf8');
             }
+            logger.info({ jobId: job.id }, 'Applied linting fixes');
           }
         }
       }
 
-      // Run tests if configured
       if (config.scripts.test) {
         logger.info({ jobId: job.id }, 'Running tests');
         const testResult = await executeCommand({
@@ -126,18 +188,16 @@ export const processJob = async (job: Job): Promise<void> => {
         });
 
         if (!testResult.success) {
-          // Fix test failures using LLM
           const fixedFiles = await fixTests(testResult.output, repoPath, config);
           if (fixedFiles.length > 0) {
-            // Apply fixed code to files
             for (const { filePath, fixedCode } of fixedFiles) {
               await writeFile(join(repoPath, filePath), fixedCode, 'utf8');
             }
+            logger.info({ jobId: job.id }, 'Applied test fixes');
           }
         }
       }
 
-      // Run formatting if configured
       if (config.scripts.format) {
         logger.info({ jobId: job.id }, 'Running formatting');
         await executeCommand({
@@ -147,71 +207,94 @@ export const processJob = async (job: Job): Promise<void> => {
         });
       }
 
-      // Commit and push changes
-      await commitChanges(git, `Fix: Automated fixes by GitHub Bot`);
-      await pushChanges(git, branchName);
+      const status = await git.status();
+      const hasPendingChanges = status.files.length > 0;
 
-      // Create pull request
-      let issueNumber: number | undefined;
-      let commentBodyForPR: string | undefined;
-      let prAction: string = '';
-      let repoOwner: string = '';
-      let repoName: string = '';
+      if (hasPendingChanges) {
+        logger.info({ jobId: job.id }, 'Committing and pushing changes');
+        await commitChanges(git, `Fix: Automated fixes by GitHub Bot (Job ${job.id})`);
+        await pushChanges(git, branchName);
 
-      if (isIssueEvent(job.payload.payload)) {
-        issueNumber = job.payload.payload.issue.number;
-        prAction = job.payload.payload.action;
-        repoOwner = job.payload.payload.repository.owner.login;
-        repoName = job.payload.payload.repository.name;
-      } else if (isPullRequestEvent(job.payload.payload)) {
-        issueNumber = job.payload.payload.pull_request.number;
-        prAction = job.payload.payload.action;
-        repoOwner = job.payload.payload.repository.owner.login;
-        repoName = job.payload.payload.repository.name;
-      }
+        let issueNumberForPRBody: number | undefined;
+        let prActionForPRBody: string = '';
+        let commentBodyForPRBody: string | undefined;
 
-      if (isIssueCommentEvent(job.payload.payload)) {
-        commentBodyForPR = job.payload.payload.comment.body;
-        if (!prAction) prAction = job.payload.payload.action;
-        if (!repoOwner) repoOwner = job.payload.payload.repository.owner.login;
-        if (!repoName) repoName = job.payload.payload.repository.name;
-        if (!issueNumber) issueNumber = job.payload.payload.issue.number;
-      } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
-        commentBodyForPR = job.payload.payload.comment.body;
-        if (!prAction) prAction = job.payload.payload.action;
-        if (!repoOwner) repoOwner = job.payload.payload.repository.owner.login;
-        if (!repoName) repoName = job.payload.payload.repository.name;
-        if (!issueNumber) issueNumber = job.payload.payload.pull_request.number;
-      }
+        if (isIssueEvent(job.payload.payload)) {
+          issueNumberForPRBody = job.payload.payload.issue.number;
+          prActionForPRBody = job.payload.payload.action;
+        } else if (isPullRequestEvent(job.payload.payload)) {
+          issueNumberForPRBody = job.payload.payload.pull_request.number;
+          prActionForPRBody = job.payload.payload.action;
+        }
 
-      if (!repoOwner || !repoName) {
-        logger.error(
-          { jobId: job.id, payload: job.payload.payload },
-          'Could not determine repository owner or name from payload',
+        if (isIssueCommentEvent(job.payload.payload)) {
+          commentBodyForPRBody = job.payload.payload.comment.body;
+          if (!prActionForPRBody) prActionForPRBody = job.payload.payload.action;
+          if (!issueNumberForPRBody) issueNumberForPRBody = job.payload.payload.issue.number;
+        } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
+          commentBodyForPRBody = job.payload.payload.comment.body;
+          if (!prActionForPRBody) prActionForPRBody = job.payload.payload.action;
+          if (!issueNumberForPRBody) {
+            issueNumberForPRBody = job.payload.payload.pull_request.number;
+          }
+        }
+
+        if (!repoOwner || !repoName) {
+          logger.error(
+            { jobId: job.id, payload: job.payload.payload },
+            'Could not determine repository owner or name for PR',
+          );
+          throw new JobError('Could not determine repository owner or name for PR');
+        }
+
+        const { title, body } = generatePRContent(
+          job.eventType,
+          prActionForPRBody,
+          issueNumberForPRBody,
+          commentBodyForPRBody,
         );
-        throw new JobError('Could not determine repository owner or name from payload');
+
+        await createPullRequest(octokit, {
+          owner: repoOwner,
+          repo: repoName,
+          title,
+          head: branchName,
+          base: config.branches.target,
+          body,
+          labels: ['bot', 'automated-fix'],
+        });
+        logger.info({ jobId: job.id }, 'Pull request created successfully');
+      } else {
+        logger.info({ jobId: job.id }, 'No changes to commit. Skipping PR creation.');
       }
 
-      const { title, body } = generatePRContent(
-        job.eventType,
-        prAction,
-        issueNumber,
-        commentBodyForPR,
-      );
+      if (originalCommentContext?.isCommentEvent) {
+        let replyMessage: string;
+        if (!hasPendingChanges) {
+          replyMessage =
+            "I apologize, but I wasn't able to make the requested changes, or no changes were necessary.";
+          logger.info(
+            { jobId: job.id, issueNumber: originalCommentContext.numberForReply },
+            'Replying that no changes were made',
+          );
+        } else {
+          replyMessage = "I've processed your request and created a pull request.";
+          logger.info(
+            { jobId: job.id, issueNumber: originalCommentContext.numberForReply },
+            'Replying with PR confirmation',
+          );
+        }
 
-      await createPullRequest(octokit, {
-        owner: repoOwner,
-        repo: repoName,
-        title,
-        head: branchName,
-        base: config.branches.target,
-        body,
-        labels: ['bot', 'automated-fix'],
-      });
+        await octokit.issues.createComment({
+          owner: originalCommentContext.owner,
+          repo: originalCommentContext.repo,
+          issue_number: originalCommentContext.numberForReply,
+          body: replyMessage,
+        });
+      }
 
       logger.info({ jobId: job.id }, 'Job completed successfully');
     } finally {
-      // Clean up repository
       if (envConfig.CLEANUP_REPOSITORIES) {
         await cleanupRepository(repoPath);
       }

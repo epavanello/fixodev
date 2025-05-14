@@ -19,7 +19,7 @@ interface CreatePRParams {
 export const createPullRequest = async (
   octokit: Octokit,
   params: CreatePRParams,
-): Promise<void> => {
+): Promise<string> => {
   try {
     logger.info(
       {
@@ -66,9 +66,11 @@ export const createPullRequest = async (
         owner: params.owner,
         repo: params.repo,
         prNumber: response.data.number,
+        prUrl: response.data.html_url,
       },
       'Pull request created successfully',
     );
+    return response.data.html_url;
   } catch (error) {
     logger.error(
       {
