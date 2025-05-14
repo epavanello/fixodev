@@ -13,7 +13,7 @@ const envSchema = z.object({
   // Git Bot Identity
   GIT_BOT_USERNAME: z.string().default('RepoSister Bot'),
   GIT_BOT_EMAIL: z.string().default('bot@repositer.ai'),
-  BOT_NAME: z.string().default('reposister'),
+  BOT_NAME: z.string().default('RepoSister'),
 
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),

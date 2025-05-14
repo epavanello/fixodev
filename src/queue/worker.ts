@@ -35,7 +35,7 @@ function getBotCommand(body: string):
       command: undefined;
     } {
   // Check for @bot mention
-  if (body.includes(BOT_NAME)) {
+  if (body.toLowerCase().includes(BOT_NAME.toLowerCase())) {
     return { shouldProcess: true, command: body };
   }
   return { shouldProcess: false, command: undefined };
