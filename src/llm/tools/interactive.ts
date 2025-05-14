@@ -21,4 +21,7 @@ export const askUserTool = createTool({
     rl.close();
     return answer;
   },
+  getReadableParams: () => {
+    return '';
+  },
 });

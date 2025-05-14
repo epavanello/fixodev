@@ -43,11 +43,14 @@ export class ToolRegistry {
   /**
    * Get JSON schema for all registered tools
    */
-  getToolsJSONSchema(): Record<string, unknown>[] {
+  getToolsJSONSchema() {
     return this.getAllTools().map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.getParameterJSONSchema(),
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.getParameterJSONSchema(),
+      },
     }));
   }
 
@@ -87,6 +90,9 @@ export function createTaskCompletionTool() {
         objectiveAchieved: params.objectiveAchieved,
         reason: params.reason,
       };
+    },
+    getReadableParams: ({ objectiveAchieved }) => {
+      return JSON.stringify({ done: objectiveAchieved });
     },
   });
 }
@@ -139,6 +145,9 @@ export function createFixCodeTool() {
     execute: async params => {
       return params;
     },
+    getReadableParams: () => {
+      return '';
+    },
   });
 }
 
@@ -153,6 +162,9 @@ export function createFixLintingTool() {
     execute: async params => {
       return params;
     },
+    getReadableParams: () => {
+      return '';
+    },
   });
 }
 
@@ -166,6 +178,9 @@ export function createFixTestsTool() {
     schema: FixedCodeSchema,
     execute: async params => {
       return params;
+    },
+    getReadableParams: () => {
+      return '';
     },
   });
 }

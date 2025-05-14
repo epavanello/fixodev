@@ -26,14 +26,14 @@ export interface Tool<PARAMS extends z.ZodType = z.ZodType, OUTPUT = unknown> {
   execute: (params: z.infer<PARAMS>) => Promise<OUTPUT>;
 
   /**
-   * Optional method to validate the result
-   */
-  validateResult?: (result: OUTPUT) => boolean;
-
-  /**
    * Generate a JSON Schema for tool parameters
    */
   getParameterJSONSchema: () => Record<string, unknown>;
+
+  /**
+   * Generate a readable string for tool parameters
+   */
+  getReadableParams: (params: z.infer<PARAMS>) => string;
 }
 
 /**
@@ -49,10 +49,11 @@ export function createTool<PARAMS extends z.ZodType, OUTPUT>(config: {
   description: string;
   schema: PARAMS;
   execute: (params: z.infer<PARAMS>) => Promise<OUTPUT>;
-  validateResult?: (result: OUTPUT) => boolean;
+  getReadableParams?: (params: z.infer<PARAMS>) => string;
 }): Tool<PARAMS, OUTPUT> {
   return {
     ...config,
+    getReadableParams: config.getReadableParams || (params => JSON.stringify(params)),
     getParameterJSONSchema: () => zodToJsonSchema(config.schema),
   };
 }

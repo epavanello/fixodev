@@ -11,6 +11,7 @@ import { Tool } from '../tools/types';
 import * as z from 'zod';
 import { openai } from '../client';
 import { askUserTool } from '../tools/interactive';
+import { ChatCompletionToolChoiceOption } from 'openai/src/resources.js';
 
 /**
  * Options for creating an agent
@@ -128,7 +129,10 @@ export class Agent {
    */
   async run<PARAMS extends z.ZodType, OUTPUT>(
     input: string,
-    { outputTool }: { outputTool: Tool<PARAMS, OUTPUT> },
+    {
+      outputTool,
+      toolChoice = 'auto',
+    }: { outputTool: Tool<PARAMS, OUTPUT>; toolChoice?: ChatCompletionToolChoiceOption },
   ): Promise<OUTPUT | undefined> {
     try {
       // Add user message to context
@@ -144,16 +148,7 @@ export class Agent {
         registryTools.register(askUserTool);
       }
 
-      const availableTools = registryTools.getAllTools();
-
-      const tools = availableTools.map(tool => ({
-        type: 'function' as const,
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.getParameterJSONSchema(),
-        },
-      }));
+      const tools = registryTools.getToolsJSONSchema();
 
       logger.debug({ tools }, 'Tools');
       while (needMoreProcessing && currentIteration < this.maxIterations) {
@@ -177,7 +172,7 @@ export class Agent {
           model: this.model,
           messages,
           tools,
-          tool_choice: 'auto',
+          tool_choice: toolChoice,
           parallel_tool_calls: true,
         });
 
@@ -219,14 +214,18 @@ export class Agent {
                 needMoreProcessing = false;
                 output = await outputTool.execute(toolArgs);
               } else {
-                if (this.conversationalLogging) {
-                  console.log(`🔨 ${toolName}()`);
+                const tool = registryTools.get(toolName);
+                if (!tool) {
+                  throw new Error(`Tool ${toolName} not found`);
                 }
-
                 // Execute the tool
-                const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
+                const result = await tool.execute(toolArgs);
 
                 logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
+
+                if (this.conversationalLogging) {
+                  console.log(`🔨 ${toolName}(${tool.getReadableParams?.(toolArgs)})`);
+                }
 
                 // Add tool result to context
                 this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));

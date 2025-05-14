@@ -30,7 +30,10 @@ async function runAgent(userInput: string) {
   });
 
   try {
-    const finalResponse = await agent.run(userInput, { outputTool: cliFinalResponseTool });
+    const finalResponse = await agent.run(userInput, {
+      outputTool: cliFinalResponseTool,
+      toolChoice: 'required',
+    });
 
     if (finalResponse !== undefined) {
       console.log("\n✅ Agent's Final Output:");

@@ -109,6 +109,9 @@ export const createWriteFileTool = (basePath: string) => {
         throw new Error(`Failed to write file: ${(error as Error).message}`);
       }
     },
+    getReadableParams: ({ content: _, ...params }) => {
+      return JSON.stringify(params);
+    },
   });
 };
 
