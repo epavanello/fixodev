@@ -98,6 +98,7 @@ export const processJob = async (job: Job): Promise<void> => {
   let repoName: string | undefined;
   let commandToProcess: string | undefined;
   let eventIssueNumber: number | undefined;
+  let eventIssueTitle: string | undefined;
 
   if (
     job.eventType === 'issue_comment' &&
@@ -113,6 +114,7 @@ export const processJob = async (job: Job): Promise<void> => {
     repoOwner = payload.repository.owner.login;
     repoName = payload.repository.name;
     eventIssueNumber = payload.issue.number;
+    eventIssueTitle = payload.issue.title;
 
     logger.info(
       { jobId: job.id, command: commandToProcess },
@@ -132,6 +134,7 @@ export const processJob = async (job: Job): Promise<void> => {
     repoOwner = payload.repository.owner.login;
     repoName = payload.repository.name;
     eventIssueNumber = payload.issue.number;
+    eventIssueTitle = payload.issue.title;
     logger.info({ jobId: job.id, command: commandToProcess }, 'Processing command from new issue');
   } else {
     logger.warn(
@@ -224,11 +227,11 @@ export const processJob = async (job: Job): Promise<void> => {
         await createPullRequest(octokit, {
           owner: repoOwner,
           repo: repoName,
-          title: `Fix: #${eventIssueNumber} by ${envConfig.BOT_NAME}`,
+          title: `Fix: ${eventIssueTitle?.slice(0, 50)}${eventIssueTitle && eventIssueTitle.length > 50 ? '...' : ''} by ${envConfig.BOT_NAME}`,
           head: branchName,
           base: config.branches.target,
           body: `This PR addresses the issue mentioned in #${eventIssueNumber}.`,
-          labels: ['bot', 'automated-fix'],
+          labels: ['bot', BOT_NAME],
         });
         logger.info({ jobId: job.id }, 'Pull request created successfully');
       } else {
