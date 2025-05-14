@@ -154,7 +154,10 @@ export const processJob = async (job: Job): Promise<void> => {
           logger,
         );
       } else {
-        logger.info({ jobId: job.id }, 'No changes to apply from comment analysis');
+        logger.info(
+          { jobId: job.id, event: job.event },
+          'No changes to apply from comment analysis',
+        );
       }
 
       if (config.scripts.lint) {
