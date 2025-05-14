@@ -53,7 +53,7 @@ async function applyChangesFromCommand(
   loggerInstance: pino.Logger,
 ): Promise<boolean> {
   loggerInstance.info({ jobId }, 'Analyzing command for changes');
-  const analysis = await analyzeCode({
+  const { analysis, history } = await analyzeCode({
     command: commandToApply,
     repositoryPath: repoPath,
     language: config.runtime,
@@ -69,6 +69,7 @@ async function applyChangesFromCommand(
         filePath: change.filePath,
         language: getFileLanguage(change.filePath),
         dependencies: change.dependencies,
+        history,
       });
       if (fixedCode) {
         await writeFile(join(repoPath, change.filePath), fixedCode, 'utf8');

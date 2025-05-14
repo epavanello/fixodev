@@ -89,6 +89,7 @@ export class AgentContext {
     maxHistoryTokens?: number;
     reservedTokens?: number;
     systemMessage?: string;
+    history?: Message[];
   }) {
     this.toolRegistry = options.toolRegistry;
     this.memory = options.memory || new MemoryStore();
@@ -101,6 +102,11 @@ export class AgentContext {
         role: MessageRole.SYSTEM,
         content: options.systemMessage,
       });
+    }
+
+    // Add history if provided
+    if (options.history) {
+      this.messages.push(...options.history.filter(msg => msg.role !== MessageRole.SYSTEM));
     }
   }
 

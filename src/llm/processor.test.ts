@@ -5,13 +5,13 @@ setDefaultTimeout(60 * 1000 * 10);
 
 describe.skip('analyzeCode', () => {
   it('should analyze code without throwing exceptions', async () => {
-    const result = await analyzeCode({
+    const { analysis } = await analyzeCode({
       command: 'Change the readme title to "Test"',
       repositoryPath: 'repos/test',
     });
 
-    expect(result).toBeDefined();
-    expect(result.changes).toBeDefined();
-    expect(result.changes.length).toBeGreaterThan(0);
+    expect(analysis).toBeDefined();
+    expect(analysis.changes).toBeDefined();
+    expect(analysis.changes.length).toBeGreaterThan(0);
   });
 });

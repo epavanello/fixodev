@@ -12,12 +12,12 @@ import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
 import {
   createRepositoryAnalysisTool,
-  RepositoryAnalysis,
   createFixCodeTool,
   createFixLintingTool,
   createFixTestsTool,
   FixedCode,
 } from './tools/registry';
+import { Message } from './agent/context';
 
 export interface CodeContext {
   filePath?: string;
@@ -29,6 +29,7 @@ export interface CodeContext {
   command?: string;
   repositoryPath?: string;
   conversationalLogging?: boolean;
+  history?: Message[];
 }
 
 /**
@@ -45,6 +46,7 @@ export const createRepositoryAgent = (repositoryPath: string, context: CodeConte
     }),
     maxIterations: 15,
     conversationalLogging: context.conversationalLogging,
+    history: context.history,
   });
 
   // Register file system tools
@@ -63,7 +65,7 @@ export const createRepositoryAgent = (repositoryPath: string, context: CodeConte
 /**
  * Analyze code using LLM
  */
-export const analyzeCode = async (context: CodeContext): Promise<RepositoryAnalysis> => {
+export const analyzeCode = async (context: CodeContext) => {
   try {
     logger.info({ command: context.command }, 'Analyzing repository for changes');
 
@@ -95,7 +97,10 @@ export const analyzeCode = async (context: CodeContext): Promise<RepositoryAnaly
     }
 
     // The response will be the result from the repositoryAnalysis tool
-    return response;
+    return {
+      analysis: response,
+      history: agent.getContext().getMessages(),
+    };
   } catch (error) {
     logger.error({ command: context.command, error }, 'Failed to analyze repository');
     throw new GitHubError(
@@ -152,7 +157,7 @@ You MUST use the "${fixCodeTool.name}" tool to return the corrected code. Do not
       }
 
       logger.info({ filePath: context.filePath }, 'Code fix completed via tool (standalone agent)');
-      return (response as FixedCode).code;
+      return response.code;
     }
 
     // Create repository agent
@@ -184,7 +189,7 @@ You MUST use the "${fixCodeTool.name}" tool to return the corrected code. Do not
     }
 
     // The response will be the result from the fixCode tool
-    return (response as FixedCode).code;
+    return response.code;
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix code');
     throw new GitHubError(
@@ -243,7 +248,7 @@ Please analyze the issues and provide the corrected code using the "${
         { filePath: context.filePath },
         'Linting fix completed via tool (standalone agent)',
       );
-      return (response as FixedCode).code;
+      return response.code;
     }
 
     // Create repository agent
@@ -277,7 +282,7 @@ Please analyze the issues and provide the corrected code using the "${
     }
 
     // The response will be the result from the fixLinting tool
-    return (response as FixedCode).code;
+    return response.code;
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix linting issues');
     throw new GitHubError(
@@ -333,7 +338,7 @@ Please analyze the test failures and provide the corrected code using the "${
       }
 
       logger.info({ filePath: context.filePath }, 'Test fix completed via tool (standalone agent)');
-      return (response as FixedCode).code;
+      return response.code;
     }
 
     // Create repository agent
@@ -367,7 +372,7 @@ Please analyze the test failures and provide the corrected code using the "${
     }
 
     // The response will be the result from the fixTests tool
-    return (response as FixedCode).code;
+    return response.code;
   } catch (error) {
     logger.error({ filePath: context.filePath, error }, 'Failed to fix test failures');
     throw new GitHubError(

@@ -3,7 +3,7 @@ import {
   ChatCompletionRole,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions/completions';
-import { AgentContext, ToolCallSchema } from './context';
+import { AgentContext, Message, ToolCallSchema } from './context';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
@@ -56,6 +56,11 @@ export interface AgentOptions {
    * Enable conversational logging for CLI mode
    */
   conversationalLogging?: boolean;
+
+  /**
+   * History of messages to include in the prompt
+   */
+  history?: Message[];
 }
 
 /**
@@ -113,6 +118,7 @@ export class Agent {
       maxHistoryTokens: options.maxHistoryTokens,
       reservedTokens: options.reservedTokens,
       systemMessage,
+      history: options.history,
     });
   }
 
