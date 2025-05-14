@@ -95,17 +95,12 @@ export const processJob = async (job: Job): Promise<void> => {
       }
       let originalCommentContext: OriginalCommentContext | undefined;
 
-      if (
-        isIssueEvent(job.payload.payload) ||
-        isPullRequestEvent(job.payload.payload) ||
-        isIssueCommentEvent(job.payload.payload) ||
-        isPullRequestReviewCommentEvent(job.payload.payload)
-      ) {
-        repoOwner = job.payload.payload.repository.owner.login;
-        repoName = job.payload.payload.repository.name;
+      if (isIssueEvent(job.event.payload) || isIssueCommentEvent(job.event.payload)) {
+        repoOwner = job.event.payload.repository.owner.login;
+        repoName = job.event.payload.repository.name;
       } else {
         logger.error(
-          { jobId: job.id, payload: job.payload.payload },
+          { jobId: job.id, payload: job.event.payload },
           'Could not determine repository owner or name from payload. Cannot proceed.',
         );
         throw new JobError(
@@ -115,7 +110,7 @@ export const processJob = async (job: Job): Promise<void> => {
 
       if (!repoOwner || !repoName) {
         logger.error(
-          { jobId: job.id, payload: job.payload.payload },
+          { jobId: job.id, payload: job.event.payload },
           'Could not determine repository owner or name from payload. Cannot proceed.',
         );
         throw new JobError(
@@ -123,8 +118,8 @@ export const processJob = async (job: Job): Promise<void> => {
         );
       }
 
-      if (isIssueCommentEvent(job.payload.payload)) {
-        const commentPayload = job.payload.payload;
+      if (isIssueCommentEvent(job.event.payload)) {
+        const commentPayload = job.event.payload;
         logger.info({ jobId: job.id }, 'Implementing requested changes for IssueCommentEvent');
         originalCommentContext = {
           owner: repoOwner,
@@ -139,8 +134,8 @@ export const processJob = async (job: Job): Promise<void> => {
           job.id,
           logger,
         );
-      } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
-        const commentPayload = job.payload.payload;
+      } else if (isPullRequestReviewCommentEvent(job.event.payload)) {
+        const commentPayload = job.event.payload;
         logger.info(
           { jobId: job.id },
           'Implementing requested changes for PullRequestReviewCommentEvent',
@@ -158,6 +153,8 @@ export const processJob = async (job: Job): Promise<void> => {
           job.id,
           logger,
         );
+      } else {
+        logger.info({ jobId: job.id }, 'No changes to apply from comment analysis');
       }
 
       if (config.scripts.lint) {
@@ -219,29 +216,29 @@ export const processJob = async (job: Job): Promise<void> => {
         let prActionForPRBody: string = '';
         let commentBodyForPRBody: string | undefined;
 
-        if (isIssueEvent(job.payload.payload)) {
-          issueNumberForPRBody = job.payload.payload.issue.number;
-          prActionForPRBody = job.payload.payload.action;
-        } else if (isPullRequestEvent(job.payload.payload)) {
-          issueNumberForPRBody = job.payload.payload.pull_request.number;
-          prActionForPRBody = job.payload.payload.action;
+        if (isIssueEvent(job.event.payload)) {
+          issueNumberForPRBody = job.event.payload.issue.number;
+          prActionForPRBody = job.event.payload.action;
+        } else if (isPullRequestEvent(job.event.payload)) {
+          issueNumberForPRBody = job.event.payload.pull_request.number;
+          prActionForPRBody = job.event.payload.action;
         }
 
-        if (isIssueCommentEvent(job.payload.payload)) {
-          commentBodyForPRBody = job.payload.payload.comment.body;
-          if (!prActionForPRBody) prActionForPRBody = job.payload.payload.action;
-          if (!issueNumberForPRBody) issueNumberForPRBody = job.payload.payload.issue.number;
-        } else if (isPullRequestReviewCommentEvent(job.payload.payload)) {
-          commentBodyForPRBody = job.payload.payload.comment.body;
-          if (!prActionForPRBody) prActionForPRBody = job.payload.payload.action;
+        if (isIssueCommentEvent(job.event.payload)) {
+          commentBodyForPRBody = job.event.payload.comment.body;
+          if (!prActionForPRBody) prActionForPRBody = job.event.payload.action;
+          if (!issueNumberForPRBody) issueNumberForPRBody = job.event.payload.issue.number;
+        } else if (isPullRequestReviewCommentEvent(job.event.payload)) {
+          commentBodyForPRBody = job.event.payload.comment.body;
+          if (!prActionForPRBody) prActionForPRBody = job.event.payload.action;
           if (!issueNumberForPRBody) {
-            issueNumberForPRBody = job.payload.payload.pull_request.number;
+            issueNumberForPRBody = job.event.payload.pull_request.number;
           }
         }
 
         if (!repoOwner || !repoName) {
           logger.error(
-            { jobId: job.id, payload: job.payload.payload },
+            { jobId: job.id, payload: job.event.payload },
             'Could not determine repository owner or name for PR',
           );
           throw new JobError('Could not determine repository owner or name for PR');

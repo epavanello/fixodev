@@ -21,7 +21,7 @@ export interface Job<T extends Schema = Schema> {
   repositoryUrl: string;
   installationId: number;
   eventType: GitHubEventType;
-  payload: WebhookEvent<T>; // Use the generic WebhookEvent
+  event: WebhookEvent<T>; // Use the generic WebhookEvent
   status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -33,7 +33,7 @@ export interface JobCreateParams<T extends Schema = Schema> {
   repositoryUrl: string;
   installationId: number;
   eventType: GitHubEventType;
-  payload: WebhookEvent<T>; // Use the generic WebhookEvent
+  event: WebhookEvent<T>; // Use the generic WebhookEvent
 }
 
 export const createJob = <T extends Schema = Schema>(params: JobCreateParams<T>): Job<T> => {
@@ -44,7 +44,7 @@ export const createJob = <T extends Schema = Schema>(params: JobCreateParams<T>)
     repositoryUrl: params.repositoryUrl,
     installationId: params.installationId,
     eventType: params.eventType,
-    payload: params.payload,
+    event: params.event,
     status: 'pending',
     createdAt: now,
     updatedAt: now,

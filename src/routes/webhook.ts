@@ -6,6 +6,7 @@ import { envConfig } from '../config/env';
 import { GitHubEventType } from '../types/github';
 import { WebhookEvent } from '../queue/job';
 import { IssueCommentCreatedEvent, IssuesOpenedEvent } from '@octokit/webhooks-types';
+import { isIssueEvent, isIssueCommentEvent } from '../types/guards';
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
@@ -70,7 +71,7 @@ function createAndQueueJob<P extends ProcessedIssueCommentPayload | ProcessedIss
     repositoryUrl,
     installationId,
     eventType: githubEventType,
-    payload: webhookEvent,
+    event: webhookEvent,
   });
 
   return job;
@@ -114,38 +115,31 @@ router.post('/github', async c => {
     }
 
     // Handle issue comments specifically
-    if (
-      event === 'issue_comment' &&
-      payload.action === 'created' &&
-      'comment' in payload &&
-      'issue' in payload &&
-      (payload as IssueCommentCreatedEvent).comment // Type assertion
-    ) {
-      const commentPayload = payload as IssueCommentCreatedEvent; // Narrow down type
-      const { shouldProcess, command } = shouldProcessComment(commentPayload.comment.body);
+    if (event === 'issue_comment' && isIssueCommentEvent(payload) && payload.action === 'created') {
+      const { shouldProcess, command } = shouldProcessComment(payload.comment.body);
 
       if (shouldProcess) {
         logger.info(
           {
             command,
-            issueNumber: commentPayload.issue.number,
-            issueTitle: commentPayload.issue.title,
-            repository: commentPayload.repository.full_name,
-            commenter: commentPayload.comment.user.login,
+            issueNumber: payload.issue.number,
+            issueTitle: payload.issue.title,
+            repository: payload.repository.full_name,
+            commenter: payload.comment.user.login,
           },
           `Processing ${BOT_NAME} command from comment`,
         );
 
         // Create enhanced payload with command
         const enhancedPayload: ProcessedIssueCommentPayload = {
-          ...commentPayload,
+          ...payload,
           command,
         };
 
         // Create job for processing with full context
         const job = createAndQueueJob({
-          repositoryUrl: commentPayload.repository.clone_url,
-          installationId: commentPayload.installation!.id,
+          repositoryUrl: payload.repository.clone_url,
+          installationId: payload.installation!.id,
           githubEventType: event,
           webhookEventNameForQueue: 'issue_comment',
           enhancedPayload,
@@ -160,37 +154,31 @@ router.post('/github', async c => {
     }
 
     // Handle issue creation
-    if (
-      event === 'issues' &&
-      payload.action === 'opened' &&
-      'issue' in payload &&
-      (payload as IssuesOpenedEvent).issue.body // Type assertion and ensure issue body exists
-    ) {
-      const issuePayload = payload as IssuesOpenedEvent; // Narrow down type
-      const { shouldProcess, command } = shouldProcessComment(issuePayload.issue.body!); // Add non-null assertion for issue body
+    if (event === 'issues' && isIssueEvent(payload) && payload.action === 'opened') {
+      const { shouldProcess, command } = shouldProcessComment(payload.issue.body!);
 
       if (shouldProcess) {
         logger.info(
           {
             command,
-            issueNumber: issuePayload.issue.number,
-            issueTitle: issuePayload.issue.title,
-            repository: issuePayload.repository.full_name,
-            opener: issuePayload.issue.user.login,
+            issueNumber: payload.issue.number,
+            issueTitle: payload.issue.title,
+            repository: payload.repository.full_name,
+            opener: payload.issue.user.login,
           },
           `Processing ${BOT_NAME} command from new issue body`,
         );
 
         // Create enhanced payload with command
         const enhancedPayload: ProcessedIssuePayload = {
-          ...issuePayload,
+          ...payload,
           command,
         };
 
         // Create job for processing with full context
         const job = createAndQueueJob({
-          repositoryUrl: issuePayload.repository.clone_url,
-          installationId: issuePayload.installation!.id,
+          repositoryUrl: payload.repository.clone_url,
+          installationId: payload.installation!.id,
           githubEventType: event,
           webhookEventNameForQueue: 'issues',
           enhancedPayload,
