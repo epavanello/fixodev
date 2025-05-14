@@ -5,7 +5,7 @@ import { appConfig } from './config/app';
 import { jobQueue } from './queue';
 import { saveQueueToDisk } from './queue/persistence';
 import { webhookRouter } from './routes/webhook';
-import { healthRouter } from './routes/health';
+import { rootRouter } from './routes/root';
 
 // Load environment variables
 import { config } from 'dotenv';
@@ -16,7 +16,7 @@ const app = new Hono();
 
 // Register routes
 app.route('/api/webhooks', webhookRouter);
-app.route('/', healthRouter);
+app.route('/', rootRouter);
 
 // Start the server
 const start = async () => {

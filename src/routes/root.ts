@@ -6,4 +6,8 @@ router.get('/health', c => {
   return c.json({ status: 'ok' });
 });
 
-export const healthRouter = router;
+router.get('/', c => {
+  return c.json({ status: 'ok' });
+});
+
+export const rootRouter = router;
