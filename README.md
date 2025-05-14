@@ -17,6 +17,15 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 4. Start the development server: `bun run dev`
 5. Run the CLI: `bun run cli`
 
+## Environment Variables
+
+| Variable Name       | Mandatory | Default Value      | Description                                   |
+|---------------------|-----------|--------------------|-----------------------------------------------|
+| `GITHUB_TOKEN`      | Yes       | N/A                | GitHub access token for the bot to operate. |
+| `OPENAI_API_KEY`    | Yes       | N/A                | API key for OpenAI integration.              |
+| `QUEUE_TYPE`        | No        | `memory`           | Type of queue system to use.                 |
+| `LOG_LEVEL`         | No        | `info`             | Level of logging (debug, info, warn, error).|
+
 ## Architecture
 
 - Bun HTTP server for webhook handling
