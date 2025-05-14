@@ -42,22 +42,30 @@ export const createPullRequest = async (
 
     // Add labels if provided
     if (params.labels && params.labels.length > 0) {
-      await octokit.issues.addLabels({
-        owner: params.owner,
-        repo: params.repo,
-        issue_number: response.data.number,
-        labels: params.labels,
-      });
+      try {
+        await octokit.issues.addLabels({
+          owner: params.owner,
+          repo: params.repo,
+          issue_number: response.data.number,
+          labels: params.labels,
+        });
+      } catch (error) {
+        logger.error({ error: error }, 'Failed to add labels to pull request');
+      }
     }
 
     // Add assignees if provided
     if (params.assignees && params.assignees.length > 0) {
-      await octokit.issues.addAssignees({
-        owner: params.owner,
-        repo: params.repo,
-        issue_number: response.data.number,
-        assignees: params.assignees,
-      });
+      try {
+        await octokit.issues.addAssignees({
+          owner: params.owner,
+          repo: params.repo,
+          issue_number: response.data.number,
+          assignees: params.assignees,
+        });
+      } catch (error) {
+        logger.error({ error: error }, 'Failed to add assignees to pull request');
+      }
     }
 
     logger.info(
