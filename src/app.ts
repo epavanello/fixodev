@@ -22,12 +22,12 @@ app.route('/', rootRouter);
 const start = async () => {
   try {
     // Load queue state from disk
-    await jobQueue.loadState();
+    jobQueue.loadState();
 
     // Set up periodic queue persistence
     const SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-    setInterval(async () => {
-      await saveQueueToDisk(jobQueue.getJobs());
+    setInterval(() => {
+      saveQueueToDisk(jobQueue.getJobs());
     }, SAVE_INTERVAL);
 
     // Start the server
