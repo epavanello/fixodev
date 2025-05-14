@@ -151,6 +151,15 @@ export const processJob = async (job: Job): Promise<void> => {
   try {
     const githubApp = new GitHubApp();
     const octokit = await githubApp.getAuthenticatedClient(job.installationId);
+
+    // Send acknowledgment before starting the work
+    await octokit.issues.createComment({
+      owner: repoOwner,
+      repo: repoName,
+      issue_number: eventIssueNumber,
+      body: '👋 Working on your request...',
+    });
+
     const token = await githubApp.getInstallationToken(job.installationId);
     const { path: repoPath, git } = await cloneRepository(job.repositoryUrl, undefined, token);
 
@@ -227,7 +236,7 @@ export const processJob = async (job: Job): Promise<void> => {
         await createPullRequest(octokit, {
           owner: repoOwner,
           repo: repoName,
-          title: `Fix: ${eventIssueTitle?.slice(0, 50)}${eventIssueTitle && eventIssueTitle.length > 50 ? '...' : ''} by ${envConfig.BOT_NAME}`,
+          title: `Fix: "${eventIssueTitle.slice(0, 50)}${eventIssueTitle && eventIssueTitle.length > 50 ? '...' : ''}" by ${envConfig.BOT_NAME}`,
           head: branchName,
           base: config.branches.target,
           body: `This PR addresses the issue mentioned in #${eventIssueNumber}.`,
