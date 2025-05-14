@@ -17,6 +17,17 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 4. Start the development server: `bun run dev`
 5. Run the CLI: `bun run cli`
 
+## Environment Variables
+
+To run the RepoSister Bot, you need to configure the following environment variables:
+
+| Variable                  | Mandatory | Default Value                | Description                                      |
+|---------------------------|-----------|------------------------------|--------------------------------------------------|
+| GITHUB_APP_ID             | Yes       | None                         | The GitHub Application ID for the bot.          |
+| GITHUB_PRIVATE_KEY        | Yes       | None                         | The private key for the GitHub App.             |
+| GITHUB_WEBHOOK_SECRET     | Yes       | None                         | Secret used to verify the authenticity of webhook events.
+| OPENAI_API_KEY            | Yes       | None                         | API key for OpenAI to enable AI functionalities. |
+
 ## Architecture
 
 - Bun HTTP server for webhook handling
