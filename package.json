@@ -15,7 +15,8 @@
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' --fix",
     "format": "prettier --write 'src/**/*.ts'",
-    "test": "bun test"
+    "test": "bun test",
+    "cli": "bun run src/cli.ts"
   },
   "keywords": [
     "github",
