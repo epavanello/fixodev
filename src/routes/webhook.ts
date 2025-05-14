@@ -3,9 +3,16 @@ import { logger } from '../config/logger';
 import { jobQueue } from '../queue';
 import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
-import { GitHubEventType } from '../types/github';
-import { WebhookEvent } from '../queue/job';
-import { Schema, WebhookEvent as OctokitWebhookEvent } from '@octokit/webhooks-types';
+import { AppMentionOnIssueJob } from '../types/jobs';
+import {
+  WebhookEventName,
+  IssuesOpenedEvent,
+  IssueCommentCreatedEvent,
+  WebhookEvent as OctokitWebhookEvent,
+} from '@octokit/webhooks-types';
+import { isIssueCommentEvent, isIssueEvent } from '@/types/guards';
+
+const BOT_MENTION = `@${envConfig.BOT_NAME}`.toLowerCase();
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
@@ -14,47 +21,36 @@ const webhooks = new Webhooks({
 
 const router = new Hono();
 
-// Helper function to create WebhookEvent and add job to the queue
-function createAndQueueJob<T extends Schema>(params: {
-  repositoryUrl: string;
-  installationId: number;
-  githubEventType: GitHubEventType;
-  enhancedPayload: T;
-  deliveryId: string | undefined;
-}): { id: string } {
-  const { repositoryUrl, installationId, githubEventType, enhancedPayload, deliveryId } = params;
-
-  const webhookEvent: WebhookEvent<T> = {
-    id: deliveryId || `event-${Date.now()}`,
-    name: githubEventType,
-    payload: enhancedPayload,
-  };
-
-  const job = jobQueue.addJob({
-    repositoryUrl,
-    installationId,
-    eventType: githubEventType,
-    event: webhookEvent,
-  });
-
-  return job;
+/**
+ * Checks if the bot is mentioned in the body and extracts the command.
+ */
+function getBotCommandFromPayload(body: string | null | undefined): {
+  shouldProcess: boolean;
+  command?: string;
+} {
+  if (!body) {
+    return { shouldProcess: false };
+  }
+  if (body.toLowerCase().includes(BOT_MENTION)) {
+    return { shouldProcess: true, command: body };
+  }
+  return { shouldProcess: false };
 }
 
 router.post('/github', async c => {
   try {
     const signature = c.req.header('x-hub-signature-256');
-    const event = c.req.header('x-github-event') as GitHubEventType;
+    const eventName = c.req.header('x-github-event') as WebhookEventName;
     const deliveryId = c.req.header('x-github-delivery');
 
     if (!signature) {
       return c.json({ error: 'Missing webhook signature' }, 400);
     }
-    if (!event) {
+    if (!eventName) {
       return c.json({ error: 'Missing X-GitHub-Event header' }, 400);
     }
 
     const rawBody = await c.req.text();
-
     const isValid = await webhooks.verify(rawBody, signature);
 
     if (!isValid) {
@@ -63,50 +59,130 @@ router.post('/github', async c => {
 
     const payload = JSON.parse(rawBody) as OctokitWebhookEvent;
 
-    if (
-      payload &&
-      typeof payload === 'object' &&
-      'action' in payload &&
-      payload.action &&
-      'repository' in payload &&
-      payload.repository &&
-      typeof payload.repository.clone_url === 'string' &&
-      'installation' in payload &&
-      payload.installation &&
-      typeof payload.installation.id === 'number'
+    let eventAction: string | undefined;
+    if ('action' in payload && payload.action) {
+      eventAction = payload.action;
+    }
+
+    let commandToProcess: string | undefined;
+    let issueNumber: number | undefined;
+    let issueTitle: string | undefined;
+    let repoOwner: string | undefined;
+    let repoName: string | undefined;
+    let repositoryUrl: string | undefined;
+    let installationId: number | undefined;
+    let senderLogin: string | undefined;
+    let shouldProcessEvent = false;
+
+    if (eventName === 'issues' && isIssueEvent(payload) && payload.action === 'opened') {
+      const issuePayload = payload;
+      const { shouldProcess, command } = getBotCommandFromPayload(issuePayload.issue.body);
+      if (shouldProcess && command) {
+        commandToProcess = command;
+        issueNumber = issuePayload.issue.number;
+        issueTitle = issuePayload.issue.title;
+        repoOwner = issuePayload.repository.owner.login;
+        repoName = issuePayload.repository.name;
+        repositoryUrl = issuePayload.repository.clone_url;
+        installationId = issuePayload.installation?.id;
+        senderLogin = issuePayload.sender.login;
+        shouldProcessEvent = true;
+        logger.info(
+          { deliveryId, eventName, repo: `${repoOwner}/${repoName}`, issue: issueNumber },
+          'Processing mention from new issue',
+        );
+      }
+    } else if (
+      eventName === 'issue_comment' &&
+      isIssueCommentEvent(payload) &&
+      payload.action === 'created'
     ) {
+      const commentPayload = payload;
+      // Ensure it's not a comment made by the bot itself to avoid loops
+      if (
+        commentPayload.sender.login.toLowerCase() === envConfig.BOT_NAME.toLowerCase() ||
+        commentPayload.sender.login.toLowerCase() === `${envConfig.BOT_NAME}[bot]`.toLowerCase()
+      ) {
+        logger.info(
+          {
+            deliveryId,
+            eventName,
+            repo: `${commentPayload.repository.owner.login}/${commentPayload.repository.name}`,
+            issue: commentPayload.issue.number,
+          },
+          'Skipping comment from bot itself.',
+        );
+        return c.json({
+          success: true,
+          processed: false,
+          message: 'Skipping comment from bot itself.',
+        });
+      }
+
+      const { shouldProcess, command } = getBotCommandFromPayload(commentPayload.comment.body);
+      if (shouldProcess && command) {
+        commandToProcess = command;
+        issueNumber = commentPayload.issue.number;
+        issueTitle = commentPayload.issue.title;
+        repoOwner = commentPayload.repository.owner.login;
+        repoName = commentPayload.repository.name;
+        repositoryUrl = commentPayload.repository.clone_url;
+        installationId = commentPayload.installation?.id;
+        senderLogin = commentPayload.sender.login;
+        shouldProcessEvent = true;
+        logger.info(
+          { deliveryId, eventName, repo: `${repoOwner}/${repoName}`, issue: issueNumber },
+          'Processing mention from issue comment',
+        );
+      }
+    }
+
+    if (
+      shouldProcessEvent &&
+      commandToProcess &&
+      issueNumber &&
+      issueTitle &&
+      repoOwner &&
+      repoName &&
+      repositoryUrl &&
+      installationId &&
+      senderLogin
+    ) {
+      const jobToQueue: AppMentionOnIssueJob = {
+        id: deliveryId || `app_mention_${Date.now()}`,
+        type: 'app_mention',
+        originalRepoOwner: repoOwner,
+        originalRepoName: repoName,
+        eventIssueNumber: issueNumber,
+        eventIssueTitle: issueTitle,
+        commandToProcess: commandToProcess,
+        triggeredBy: senderLogin,
+        installationId: installationId,
+        repositoryUrl: repositoryUrl,
+      };
+
+      // Assuming jobQueue.addJob can handle this new job structure.
+      // The actual Job type in job.ts might need to be QueuedJob from types/jobs.ts
+      const queuedJobEntry = jobQueue.addJob(jobToQueue);
+
       logger.info(
-        {
-          event,
-          action: payload.action,
-          repository: payload.repository.full_name,
-        },
-        `Webhook event suitable for queueing.`,
+        { jobId: queuedJobEntry.id, eventName, action: eventAction },
+        'AppMentionJob event queued',
       );
-
-      const job = createAndQueueJob({
-        repositoryUrl: payload.repository.clone_url,
-        installationId: payload.installation.id,
-        githubEventType: event,
-        enhancedPayload: payload,
-        deliveryId,
-      });
-
-      logger.info({ jobId: job.id, event, action: payload.action }, 'Webhook event queued');
-      return c.json({ success: true, jobId: job.id });
+      return c.json({ success: true, jobId: queuedJobEntry.id });
     } else {
       logger.info(
-        { event },
-        'Received GitHub webhook not suitable for queueing (missing repository, installation, or required fields).',
+        { deliveryId, eventName, action: eventAction },
+        'Webhook event not suitable for AppMentionJob queueing (no mention, unsupported action, or missing data).',
       );
       return c.json({
         success: true,
         processed: false,
-        message: 'Event not queued, missing essential information for processing.',
+        message: 'Event not queued for AppMentionJob processing.',
       });
     }
   } catch (error) {
-    logger.error({ error }, 'Error processing webhook');
+    logger.error({ error: error }, 'Error processing webhook');
     return c.json({ error: 'Internal Server Error' }, 500);
   }
 });

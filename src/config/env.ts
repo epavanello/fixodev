@@ -12,7 +12,7 @@ const envSchema = z.object({
 
   // Git Bot Identity
   GIT_BOT_USERNAME: z.string().default('RepoSister Bot'),
-  GIT_BOT_EMAIL: z.string().default('bot@repositer.ai'),
+  GIT_BOT_EMAIL: z.string().default('bot@reposister.ai'),
   BOT_NAME: z.string().default('RepoSister'),
 
   // OpenAI
@@ -39,6 +39,7 @@ const envSchema = z.object({
 
   // Docker
   DOCKER_RUNTIME_PREFIX: z.string().optional(),
+  BOT_USER_PAT: z.string().optional(),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

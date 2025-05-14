@@ -1,7 +1,7 @@
 import { writeFile, readFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { Job } from './job';
+import { ManagedJob } from './job';
 import { logger } from '../config/logger';
 
 const DATA_DIR = join(process.cwd(), 'data');
@@ -10,7 +10,7 @@ const QUEUE_FILE = join(DATA_DIR, 'queue.json');
 /**
  * Save queue to disk
  */
-export const saveQueueToDisk = async (queue: Job[]): Promise<void> => {
+export const saveQueueToDisk = async (queue: ManagedJob[]): Promise<void> => {
   try {
     // Create data directory if it doesn't exist
     if (!existsSync(DATA_DIR)) {
@@ -33,7 +33,7 @@ export const saveQueueToDisk = async (queue: Job[]): Promise<void> => {
 /**
  * Load queue from disk
  */
-export const loadQueueFromDisk = async (): Promise<Job[]> => {
+export const loadQueueFromDisk = async (): Promise<ManagedJob[]> => {
   try {
     // Check if queue file exists
     if (!existsSync(QUEUE_FILE)) {
@@ -43,19 +43,19 @@ export const loadQueueFromDisk = async (): Promise<Job[]> => {
 
     // Read file and parse JSON
     const data = await readFile(QUEUE_FILE, 'utf8');
-    const queue = JSON.parse(data) as Job[];
+    const loadedJobs = JSON.parse(data) as ManagedJob[];
 
     // Convert string dates back to Date objects
-    queue.forEach(job => {
+    loadedJobs.forEach(job => {
       job.createdAt = new Date(job.createdAt);
       job.updatedAt = new Date(job.updatedAt);
     });
 
-    logger.info(`Loaded ${queue.length} jobs from disk`);
+    logger.info(`Loaded ${loadedJobs.length} jobs from disk`);
 
-    return queue;
+    return loadedJobs;
   } catch (error) {
-    logger.error(error, 'Failed to load queue from disk');
+    logger.error(error, 'Failed to load queue from disk, starting with empty queue.');
     return [];
   }
 };

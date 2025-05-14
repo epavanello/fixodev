@@ -1,34 +1,44 @@
-import { Job, JobCreateParams, createJob } from './job';
+import { QueuedJob } from '../types/jobs';
+import { ManagedJob, JobStatus } from './job';
 import { logger } from '../config/logger';
 import { processJob } from './worker';
 import { loadQueueFromDisk } from './persistence';
 
 class JobQueue {
-  private queue: Job[] = [];
+  private queue: ManagedJob[] = [];
   private isProcessing = false;
+  private currentlyProcessingJobId: string | null = null;
 
   /**
    * Add a new job to the queue
    */
-  public addJob(params: JobCreateParams): Job {
-    const job = createJob(params);
-    this.queue.push(job);
+  public addJob(jobData: QueuedJob): ManagedJob {
+    const now = new Date();
+    const managedJob: ManagedJob = {
+      ...jobData,
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now,
+      attempts: 0,
+      logs: [],
+    };
 
-    logger.info({ jobId: job.id, repositoryUrl: job.repositoryUrl }, 'Job added to queue');
+    this.queue.push(managedJob);
+    logger.info({ jobId: managedJob.id, type: managedJob.type }, 'Job added to queue');
 
-    // Start processing if not already running
     if (!this.isProcessing) {
       this.processNextJob();
     }
-
-    return job;
+    return managedJob;
   }
 
   /**
-   * Get the next job from the queue
+   * Get the next job from the queue that is not currently being processed.
    */
-  private getNextJob(): Job | undefined {
-    return this.queue.find(job => job.status === 'pending');
+  private getNextJob(): ManagedJob | undefined {
+    return this.queue.find(
+      job => job.status === 'pending' && job.id !== this.currentlyProcessingJobId,
+    );
   }
 
   /**
@@ -36,6 +46,7 @@ class JobQueue {
    */
   private async processNextJob() {
     if (this.isProcessing) {
+      logger.debug('Already processing a job or processNextJob called concurrently');
       return;
     }
 
@@ -43,73 +54,83 @@ class JobQueue {
 
     if (!job) {
       this.isProcessing = false;
+      logger.debug('No pending jobs to process.');
       return;
     }
 
     this.isProcessing = true;
+    this.currentlyProcessingJobId = job.id;
 
     try {
-      // Update job status
       job.status = 'processing';
       job.updatedAt = new Date();
       job.attempts += 1;
 
-      logger.info({ jobId: job.id }, 'Processing job');
+      logger.info({ jobId: job.id, type: job.type, attempt: job.attempts }, 'Processing job');
 
-      // Process the job
       await processJob(job);
 
-      // Mark job as completed
       job.status = 'completed';
-      job.updatedAt = new Date();
-      job.logs.push('Job completed successfully');
-
-      logger.info({ jobId: job.id }, 'Job completed');
+      job.logs.push(`Attempt ${job.attempts}: Job completed successfully`);
+      logger.info({ jobId: job.id, type: job.type }, 'Job completed');
     } catch (error) {
-      // Mark job as failed
       job.status = 'failed';
-      job.updatedAt = new Date();
-      job.logs.push(`Job failed: ${error instanceof Error ? error.message : String(error)}`);
-
-      logger.error({ jobId: job.id, error }, 'Job failed');
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      job.logs.push(`Attempt ${job.attempts}: Job failed: ${errorMessage}`);
+      logger.error(
+        {
+          jobId: job.id,
+          type: job.type,
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+        'Job failed',
+      );
     } finally {
+      job.updatedAt = new Date();
       this.isProcessing = false;
+      this.currentlyProcessingJobId = null;
 
-      // Continue processing queue
-      if (this.getNextJob()) {
-        this.processNextJob();
-      }
+      setTimeout(() => this.processNextJob(), 0);
     }
   }
 
   /**
    * Get all jobs in the queue
    */
-  public getJobs(): Job[] {
+  public getJobs(): ManagedJob[] {
     return [...this.queue];
   }
 
   /**
    * Get a job by ID
    */
-  public getJob(id: string): Job | undefined {
+  public getJob(id: string): ManagedJob | undefined {
     return this.queue.find(job => job.id === id);
   }
 
   /**
-   * Save queue state to disk
+   * Save queue state to disk - Placeholder if persistence.ts needs changes
    */
   public saveState(): void {
-    logger.info('Queue state saved');
+    logger.info('Queue state persistence needs to be implemented with ManagedJob[]');
   }
 
   /**
    * Load queue state from disk
    */
   public async loadState(): Promise<void> {
-    logger.info('Queue state loaded');
-    this.queue = await loadQueueFromDisk();
-    this.processNextJob();
+    try {
+      const loadedJobs = await loadQueueFromDisk();
+      this.queue = loadedJobs as ManagedJob[];
+      logger.info({ count: this.queue.length }, 'Queue state loaded from disk.');
+    } catch (error) {
+      logger.error({ error }, 'Failed to load queue from disk. Starting with an empty queue.');
+      this.queue = [];
+    }
+    if (!this.isProcessing) {
+      this.processNextJob();
+    }
   }
 }
 

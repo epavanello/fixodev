@@ -1,47 +1,21 @@
-import { GitHubEventType } from '../types/github';
-import { Schema } from '@octokit/webhooks-types';
-
-export interface WebhookEvent<T extends Schema = Schema> {
-  id: string;
-  name: GitHubEventType;
-  payload: T;
-}
+import { QueuedJob } from '../types/jobs'; // Import the new centralized job type
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
-export interface Job<T extends Schema = Schema> {
-  id: string;
-  repositoryUrl: string;
-  installationId: number;
-  eventType: GitHubEventType;
-  event: WebhookEvent<T>;
+/**
+ * Represents a job as it is stored and managed by the JobQueue.
+ * It combines a QueuedJob (AppMentionJob or UserMentionJob) with queue-specific metadata.
+ */
+export type ManagedJob = QueuedJob & {
   status: JobStatus;
   createdAt: Date;
   updatedAt: Date;
   attempts: number;
   logs: string[];
-}
-
-export interface JobCreateParams<T extends Schema = Schema> {
-  repositoryUrl: string;
-  installationId: number;
-  eventType: GitHubEventType;
-  event: WebhookEvent<T>;
-}
-
-export const createJob = <T extends Schema = Schema>(params: JobCreateParams<T>): Job<T> => {
-  const now = new Date();
-
-  return {
-    id: `job_${now.getTime()}`,
-    repositoryUrl: params.repositoryUrl,
-    installationId: params.installationId,
-    eventType: params.eventType,
-    event: params.event,
-    status: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    attempts: 0,
-    logs: [],
-  };
+  // The 'id' from QueuedJob will be the primary identifier.
 };
+
+// The createJob function is removed as jobs are now constructed directly
+// by webhook handlers or pollers as AppMentionJob or UserMentionJob.
+
+// The old Job, WebhookEvent, and JobCreateParams interfaces are removed.

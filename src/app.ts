@@ -5,10 +5,8 @@ import { jobQueue } from './queue';
 import { saveQueueToDisk } from './queue/persistence';
 import { webhookRouter } from './routes/webhook';
 import { rootRouter } from './routes/root';
-
-// Load environment variables
-import { config } from 'dotenv';
-config();
+import { startNotificationPolling } from './polling/notificationPoller';
+import { envConfig } from './config/env';
 
 // Create Hono app
 const app = new Hono();
@@ -21,7 +19,14 @@ app.route('/', rootRouter);
 const start = async () => {
   try {
     // Load queue state from disk
-    jobQueue.loadState();
+    await jobQueue.loadState();
+
+    // Start the notification poller if configured
+    if (envConfig.BOT_USER_PAT && envConfig.BOT_NAME) {
+      startNotificationPolling();
+    } else {
+      logger.warn('Notification poller not started: BOT_USER_PAT or BOT_NAME not configured.');
+    }
 
     // Set up periodic queue persistence
     const SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
