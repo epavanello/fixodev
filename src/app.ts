@@ -1,4 +1,3 @@
-import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { logger } from './config/logger';
 import { appConfig } from './config/app';
@@ -30,8 +29,8 @@ const start = async () => {
       saveQueueToDisk(jobQueue.getJobs());
     }, SAVE_INTERVAL);
 
-    // Start the server
-    serve({
+    // Start the server using Hono's native server
+    Bun.serve({
       fetch: app.fetch,
       port: appConfig.port,
       hostname: appConfig.host,
