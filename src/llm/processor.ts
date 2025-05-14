@@ -28,12 +28,13 @@ export interface CodeContext {
   projectType?: string;
   command?: string;
   repositoryPath?: string;
+  conversationalLogging?: boolean;
 }
 
 /**
  * Create and configure an Agent for a repository
  */
-const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => {
+export const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => {
   // Create the agent
   const agent = new Agent({
     basePath: repositoryPath,
@@ -43,6 +44,7 @@ const createRepositoryAgent = (repositoryPath: string, context: CodeContext) => 
       languages: [context.language || 'unknown'],
     }),
     maxIterations: 15,
+    conversationalLogging: context.conversationalLogging,
   });
 
   // Register file system tools

@@ -34,6 +34,7 @@
     "@octokit/rest": "^21.1.1",
     "@octokit/webhooks": "^13.8.2",
     "@octokit/webhooks-types": "^7.6.1",
+    "commander": "^13.1.0",
     "dockerode": "^4.0.0",
     "dotenv": "^16.0.0",
     "fast-glob": "3.3.3",

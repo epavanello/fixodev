@@ -1,7 +1,10 @@
-import { Agent, AgentOptions } from './llm/agent';
+import { Agent } from './llm/agent';
 import { createTool } from './llm/tools/types';
 import * as z from 'zod';
 import path from 'path';
+import { Command } from 'commander';
+import readline from 'readline/promises';
+import { createRepositoryAgent } from './llm/processor';
 
 // Schema for the CLI's final response tool
 const cliFinalResponseSchema = z.object({
@@ -20,34 +23,11 @@ const cliFinalResponseTool = createTool({
   },
 });
 
-async function main() {
-  // Basic command line argument parsing
-  const args = process.argv.slice(2);
-  if (args.length === 0) {
-    console.error('🔴 Please provide an input prompt for the agent.');
-    console.error('Usage: bun run cli <your prompt here>');
-    process.exit(1);
-  }
-  const userInput = args.join(' ');
-
-  const agentOptions: AgentOptions = {
-    basePath: path.resolve(process.cwd()), // Use current working directory as basePath
-    // You might want to customize the system message for CLI interactions
-    systemMessage:
-      'You are a helpful AI assistant. When you have the final answer to the user\'s query, you MUST use the "cli_final_response_tool" to provide it.',
-    // Other options can be added here or exposed as CLI flags later
-    // model: 'gpt-4o',
-    // maxIterations: 5,
-  };
-
-  const agent = new Agent(agentOptions);
-
-  // Note: The Agent's constructor already registers 'createTaskCompletionTool'.
-  // If your agent needs other general-purpose tools for CLI mode, register them here:
-  // agent.registerTool(someOtherTool);
-
-  console.log(`💬 Running agent with input: "${userInput}"`);
-  console.log('⏳ Waiting for agent response...');
+async function runAgent(userInput: string) {
+  const agent = createRepositoryAgent(path.resolve(process.cwd()), {
+    language: 'typescript',
+    conversationalLogging: true,
+  });
 
   try {
     const finalResponse = await agent.run(userInput, { outputTool: cliFinalResponseTool });
@@ -64,6 +44,34 @@ async function main() {
     console.error('\n❌ Error running agent:', error);
     process.exit(1);
   }
+}
+
+async function main() {
+  const program = new Command();
+
+  program
+    .name('agent-cli')
+    .description('CLI to interact with the AI agent.')
+    .argument('[prompt]', 'The initial prompt for the agent')
+    .action(async (prompt: string | undefined) => {
+      let userInput = prompt;
+      if (!userInput) {
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        userInput = await rl.question('🤖 How can I assist you today? ');
+        rl.close();
+      }
+
+      if (!userInput || userInput.trim() === '') {
+        console.error('🔴 No input provided. Exiting.');
+        process.exit(1);
+      }
+      await runAgent(userInput);
+    });
+
+  await program.parseAsync(process.argv);
 }
 
 main().catch(err => {

@@ -7,10 +7,10 @@ import { AgentContext, ToolCallSchema } from './context';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
-import { createTaskCompletionTool } from '../tools/registry';
 import { Tool } from '../tools/types';
 import * as z from 'zod';
 import { openai } from '../client';
+import { askUserTool } from '../tools/interactive';
 
 /**
  * Options for creating an agent
@@ -50,6 +50,11 @@ export interface AgentOptions {
    * Maximum number of iterations for a single task
    */
   maxIterations?: number;
+
+  /**
+   * Enable conversational logging for CLI mode
+   */
+  conversationalLogging?: boolean;
 }
 
 /**
@@ -77,11 +82,13 @@ export class Agent {
   private basePath: string;
   private steps: AgentStep[] = [];
   private maxIterations: number;
+  private conversationalLogging: boolean;
 
   constructor(options: AgentOptions) {
     this.basePath = options.basePath;
     this.model = options.model || 'gpt-4o';
     this.maxIterations = options.maxIterations || 5;
+    this.conversationalLogging = options.conversationalLogging || false;
 
     // Initialize OpenAI client
     this.openai = openai;
@@ -89,11 +96,14 @@ export class Agent {
     // Initialize tool registry
     const toolRegistry = new ToolRegistry();
 
-    // Register the task completion tool
-    toolRegistry.register(createTaskCompletionTool());
-
     // Initialize memory store
     const memory = new MemoryStore();
+
+    // Construct the system message
+    let systemMessage = options.systemMessage || 'You are a helpful AI assistant.';
+
+    const contextPreamble = `You are an AI assistant operating within the local directory: '${this.basePath}'.`;
+    systemMessage = `${contextPreamble} ${systemMessage}`;
 
     // Initialize context
     this.context = new AgentContext({
@@ -101,7 +111,7 @@ export class Agent {
       memory,
       maxHistoryTokens: options.maxHistoryTokens,
       reservedTokens: options.reservedTokens,
-      systemMessage: options.systemMessage,
+      systemMessage,
     });
   }
 
@@ -128,18 +138,24 @@ export class Agent {
       let needMoreProcessing = true;
       let output: OUTPUT | undefined;
 
-      // Get available tools as JSON Schema
-      const tools = [...this.context.getToolRegistry().getAllTools(), ...[outputTool]].map(
-        tool => ({
-          type: 'function' as const,
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.getParameterJSONSchema(),
-          },
-        }),
-      );
+      const registryTools = this.context.getToolRegistry();
+      registryTools.register(outputTool);
+      if (this.conversationalLogging) {
+        registryTools.register(askUserTool);
+      }
 
+      const availableTools = registryTools.getAllTools();
+
+      const tools = availableTools.map(tool => ({
+        type: 'function' as const,
+        function: {
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.getParameterJSONSchema(),
+        },
+      }));
+
+      logger.debug({ tools }, 'Tools');
       while (needMoreProcessing && currentIteration < this.maxIterations) {
         currentIteration++;
 
@@ -152,6 +168,9 @@ export class Agent {
         const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
 
         logger.debug({ messages, iteration: currentIteration }, 'Agent request');
+        if (this.conversationalLogging) {
+          process.stdout.write('🤔 Thinking...\r');
+        }
 
         // Send the request to OpenAI
         const response = await this.openai.chat.completions.create({
@@ -166,6 +185,10 @@ export class Agent {
         const responseMessage = response.choices[0].message;
 
         logger.debug({ responseMessage, iteration: currentIteration }, 'Agent response');
+        if (this.conversationalLogging) {
+          // Clear the "Thinking..." message using ANSI escape codes
+          process.stdout.write('\x1b[2K\r'); // Clear entire line and move cursor to start
+        }
 
         // Set default for this iteration's outcome
         let iterationOutput = responseMessage.content || '';
@@ -196,6 +219,10 @@ export class Agent {
                 needMoreProcessing = false;
                 output = await outputTool.execute(toolArgs);
               } else {
+                if (this.conversationalLogging) {
+                  console.log(`🔨 ${toolName}()`);
+                }
+
                 // Execute the tool
                 const result = await this.context.getToolRegistry().execute(toolName, toolArgs);
 
@@ -218,6 +245,9 @@ export class Agent {
               const errorMessage = `Error executing tool: ${(error as Error).message}`;
 
               logger.error({ error, iteration: currentIteration }, errorMessage);
+              if (this.conversationalLogging) {
+                console.log(`⚠️ Error using tool ${toolCall.function.name}: ${errorMessage}`);
+              }
 
               // Add error as tool result
               this.context.addToolResultMessage(
@@ -230,6 +260,9 @@ export class Agent {
         } else {
           // No tool calls, just add content as a message and continue or finish
           iterationOutput = responseMessage.content || '';
+          if (this.conversationalLogging && iterationOutput) {
+            console.log(`🤖 Assistant:\n${iterationOutput}`);
+          }
 
           // Add assistant message to context
           this.context.addAssistantMessage(iterationOutput);
