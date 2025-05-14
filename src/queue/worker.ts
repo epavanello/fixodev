@@ -153,7 +153,7 @@ export const processJob = async (job: Job): Promise<void> => {
     const octokit = await githubApp.getAuthenticatedClient(job.installationId);
 
     // Send acknowledgment before starting the work
-    await octokit.issues.createComment({
+    const initialComment = await octokit.issues.createComment({
       owner: repoOwner,
       repo: repoName,
       issue_number: eventIssueNumber,
@@ -248,6 +248,12 @@ export const processJob = async (job: Job): Promise<void> => {
       }
 
       let replyMessage: string;
+
+      await octokit.issues.deleteComment({
+        owner: repoOwner,
+        repo: repoName,
+        comment_id: initialComment.data.id,
+      });
 
       if (!hasPendingChanges && !filesChangedByCommand) {
         // Also consider if command made changes
