@@ -12,7 +12,7 @@ const webhooks = new Webhooks({
   secret: envConfig.GITHUB_WEBHOOK_SECRET,
 });
 
-const BOT_NAME = envConfig.BOT_NAME;
+const BOT_NAME = `@${envConfig.BOT_NAME}`;
 
 // Type for our processed issue comment payloads, extending Octokit's type
 interface ProcessedIssueCommentPayload extends IssueCommentCreatedEvent {
@@ -26,13 +26,12 @@ interface ProcessedIssuePayload extends IssuesOpenedEvent {
 
 const router = new Hono();
 
-const botName = `@${envConfig.BOT_NAME}`;
 // Check if the bot should respond to this comment
 function shouldProcessComment(commentBody: string): { shouldProcess: boolean; command?: string } {
   // Check for @bot mention
-  if (commentBody.includes(botName)) {
+  if (commentBody.includes(BOT_NAME)) {
     // Extract the command/request after the mention
-    const mentionRegex = new RegExp(`${botName}[ \t\r\n\f\v]+(.+)`, 'i');
+    const mentionRegex = new RegExp(`${BOT_NAME}[ \t\r\n\f\v]+(.+)`, 'i');
     const match = commentBody.match(mentionRegex);
     if (match) {
       return { shouldProcess: true, command: match[1].trim() };
@@ -134,7 +133,7 @@ router.post('/github', async c => {
             repository: commentPayload.repository.full_name,
             commenter: commentPayload.comment.user.login,
           },
-          `Processing ${botName} command from comment`,
+          `Processing ${BOT_NAME} command from comment`,
         );
 
         // Create enhanced payload with command
@@ -155,7 +154,7 @@ router.post('/github', async c => {
 
         return c.json({ success: true, jobId: job.id });
       } else {
-        logger.debug(`Comment does not contain ${botName} mention, ignoring`);
+        logger.debug(`Comment does not contain ${BOT_NAME} mention, ignoring`);
         return c.json({ success: true, processed: false });
       }
     }
@@ -179,7 +178,7 @@ router.post('/github', async c => {
             repository: issuePayload.repository.full_name,
             opener: issuePayload.issue.user.login,
           },
-          `Processing ${botName} command from new issue body`,
+          `Processing ${BOT_NAME} command from new issue body`,
         );
 
         // Create enhanced payload with command
@@ -200,7 +199,7 @@ router.post('/github', async c => {
 
         return c.json({ success: true, jobId: job.id });
       } else {
-        logger.debug(`New issue does not contain ${botName} mention, ignoring`);
+        logger.debug(`New issue does not contain ${BOT_NAME} mention, ignoring`);
         return c.json({ success: true, processed: false });
       }
     }
