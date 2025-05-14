@@ -25,7 +25,8 @@
     "linting"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "BSL-1.1",
+  "licenseFile": "LICENSE.md",
   "dependencies": {
     "@hono/node-server": "^1.14.1",
     "@octokit/auth-app": "^7.2.1",
