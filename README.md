@@ -14,6 +14,11 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 1. Clone the repository
 2. Install dependencies: `bun install`
 3. Copy `env.example` to `.env` and fill in the required values
+   - **Mandatory Environment Variables:**  
+     - `GITHUB_APP_ID`: Your GitHub App ID.  
+     - `GITHUB_PRIVATE_KEY`: Your GitHub Private Key for app authentication.  
+     - `GITHUB_WEBHOOK_SECRET`: Secret for verifying incoming webhooks.  
+     - `OPENAI_API_KEY`: API key for OpenAI services.
 4. Start the development server: `bun run dev`
 5. Run the CLI: `bun run cli`
 
