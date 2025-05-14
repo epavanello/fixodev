@@ -17,6 +17,14 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 4. Start the development server: `bun run dev`
 5. Run the CLI: `bun run cli`
 
+## Mandatory Environment Variables
+
+| Variable          | Description                                     |
+|-------------------|-------------------------------------------------|
+| `DATABASE_URL`    | The URL to the database used by the application.|
+| `OPENAI_API_KEY`  | Your OpenAI API key used for AI integration.    |
+| `WEBHOOK_SECRET`  | The secret used to verify incoming webhooks.    |
+
 ## Architecture
 
 - Bun HTTP server for webhook handling
