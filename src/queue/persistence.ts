@@ -17,14 +17,11 @@ export const saveQueueToDisk = async (queue: ManagedJob[]): Promise<void> => {
       await mkdir(DATA_DIR, { recursive: true });
     }
 
-    // Filter only pending and processing jobs
-    const activeJobs = queue.filter(job => job.status === 'pending' || job.status === 'processing');
-
     // Serialize queue and save to file
-    const data = JSON.stringify(activeJobs, null, 2);
+    const data = JSON.stringify(queue, null, 2);
     await writeFile(QUEUE_FILE, data, 'utf8');
 
-    logger.info(`Queue saved to disk (${activeJobs.length} active jobs)`);
+    logger.info(`Queue saved to disk (${queue.length} active jobs)`);
   } catch (error) {
     logger.error(error, 'Failed to save queue to disk');
   }

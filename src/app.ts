@@ -31,7 +31,8 @@ const start = async () => {
     // Set up periodic queue persistence
     const SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
     setInterval(() => {
-      saveQueueToDisk(jobQueue.getJobs());
+      jobQueue.cleanupOldJobs();
+      jobQueue.saveState();
     }, SAVE_INTERVAL);
 
     // Start the server using Hono's native server
@@ -53,7 +54,7 @@ const shutdown = async () => {
   logger.info('Shutting down server...');
 
   // Save queue state before exiting
-  await saveQueueToDisk(jobQueue.getJobs());
+  await jobQueue.saveState();
 
   process.exit(0);
 };

@@ -1,8 +1,8 @@
 import { QueuedJob } from '../types/jobs';
-import { ManagedJob, JobStatus } from './job';
+import { ManagedJob } from './job';
 import { logger } from '../config/logger';
 import { processJob } from './worker';
-import { loadQueueFromDisk } from './persistence';
+import { loadQueueFromDisk, saveQueueToDisk } from './persistence';
 
 class JobQueue {
   private queue: ManagedJob[] = [];
@@ -109,17 +109,22 @@ class JobQueue {
     return this.queue.find(job => job.id === id);
   }
 
+  public cleanupOldJobs() {
+    this.queue = this.queue.filter(job => job.status === 'pending' || job.status === 'processing');
+  }
+
   /**
    * Save queue state to disk - Placeholder if persistence.ts needs changes
    */
-  public saveState(): void {
-    logger.info('Queue state persistence needs to be implemented with ManagedJob[]');
+  public async saveState() {
+    await saveQueueToDisk(this.queue);
+    logger.info({ count: this.queue.length }, 'Queue state saved to disk.');
   }
 
   /**
    * Load queue state from disk
    */
-  public async loadState(): Promise<void> {
+  public async loadState() {
     try {
       const loadedJobs = await loadQueueFromDisk();
       this.queue = loadedJobs as ManagedJob[];
