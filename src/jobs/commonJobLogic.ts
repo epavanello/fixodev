@@ -31,11 +31,13 @@ export async function applyChangesFromCommand(
   baseLogger: pino.Logger = logger,
 ): Promise<boolean> {
   baseLogger.info({ jobId }, 'Analyzing command for code changes');
-  const { analysis, history } = await analyzeCode({
-    command: commandToApply,
-    repositoryPath: repoPath,
-    language: config.runtime, // Assuming config.runtime is the primary language for analysis context
-  });
+  const { analysis, history } = await analyzeCode(
+    {
+      command: commandToApply,
+      language: config.runtime,
+    },
+    repoPath,
+  );
 
   let filesChangedCount = 0;
   if (analysis.changes && analysis.changes.length > 0) {
@@ -47,12 +49,17 @@ export async function applyChangesFromCommand(
       const fullFilePath = join(repoPath, change.filePath);
       try {
         const fileContent = await readFile(fullFilePath, 'utf8');
-        const fixedCode = await fixCode(fileContent, change.description, {
-          filePath: change.filePath,
-          language: getFileLanguage(change.filePath),
-          dependencies: change.dependencies,
-          history,
-        });
+        const fixedCode = await fixCode(
+          fileContent,
+          change.description,
+          {
+            filePath: change.filePath,
+            language: getFileLanguage(change.filePath),
+            dependencies: change.dependencies,
+            history,
+          },
+          repoPath,
+        );
         if (fixedCode) {
           await writeFile(fullFilePath, fixedCode, 'utf8');
           baseLogger.info(
@@ -97,11 +104,17 @@ async function llmFixLintingWrapper(
       const fullFilePath = join(repoPath, filePath);
       try {
         const fileContent = await readFile(fullFilePath, 'utf8');
-        const fixedCode = await llmFixLinting(fileContent, issues, {
-          filePath,
-          language: getFileLanguage(filePath), // from jobUtils
-          linter: config.linter,
-        });
+
+        const fixedCode = await llmFixLinting(
+          fileContent,
+          issues,
+          {
+            filePath,
+            language: getFileLanguage(filePath),
+            linter: config.linter,
+          },
+          repoPath,
+        );
         if (fixedCode) {
           fixedFiles.push({ filePath, fixedCode });
           baseLogger.info({ jobId, file: filePath }, 'LLM generated fix for linting issue.');
@@ -132,7 +145,7 @@ async function llmFixTestsWrapper(
 ): Promise<FixedFile[]> {
   baseLogger.info({ jobId }, 'Attempting LLM-based test fixes.');
   try {
-    const testFailures = parseTestOutput(testOutput); // from jobUtils
+    const testFailures = parseTestOutput(testOutput);
     if (testFailures.length === 0) {
       baseLogger.info({ jobId }, 'No test failures parsed from output for LLM.');
       return [];
@@ -143,11 +156,17 @@ async function llmFixTestsWrapper(
       const fullFilePath = join(repoPath, filePath);
       try {
         const fileContent = await readFile(fullFilePath, 'utf8');
-        const fixedCode = await llmFixTests(fileContent, failures.join('\n'), {
-          filePath,
-          language: getFileLanguage(filePath), // from jobUtils
-          testFramework: config.testFramework,
-        });
+
+        const fixedCode = await llmFixTests(
+          fileContent,
+          failures.join('\n'),
+          {
+            filePath,
+            language: getFileLanguage(filePath),
+            testFramework: config.testFramework,
+          },
+          repoPath,
+        );
         if (fixedCode) {
           fixedFiles.push({ filePath, fixedCode });
           baseLogger.info({ jobId, file: filePath }, 'LLM generated fix for test failure.');

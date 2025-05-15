@@ -3,7 +3,7 @@ import * as z from 'zod';
 import path from 'path';
 import { Command } from 'commander';
 import readline from 'readline/promises';
-import { createRepositoryAgent } from './llm/processor';
+import { createSourceModifierAgent } from './llm/processor';
 
 // Schema for the CLI's final response tool
 const cliFinalResponseSchema = z.object({
@@ -23,14 +23,16 @@ const cliFinalResponseTool = createTool({
 });
 
 async function runAgent(userInput: string) {
-  const agent = createRepositoryAgent(path.resolve(process.cwd()), {
-    conversationalLogging: true,
-  });
+  const agent = createSourceModifierAgent(
+    {
+      conversationalLogging: true,
+    },
+    path.resolve(process.cwd()),
+  );
 
   try {
     const finalResponse = await agent.run(userInput, {
       outputTool: cliFinalResponseTool,
-      toolChoice: 'required',
     });
 
     if (finalResponse !== undefined) {

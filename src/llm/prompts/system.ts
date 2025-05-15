@@ -101,6 +101,56 @@ I will provide you with a specific task. Please help me accomplish it by thinkin
   return prompt;
 };
 
+// New System Prompt Factories for Specific Fix Tasks
+
+/**
+ * System prompt for fixing a code issue.
+ */
+export const generateFixCodeSystemPrompt = (
+  outputToolName: string,
+  filePath?: string,
+  language?: string,
+  issue?: string,
+): string => {
+  return `You are a professional developer. Your task is to fix a specific issue in the provided code snippet.
+File context: ${filePath || 'unknown'}.
+Language: ${language || 'unknown'}.
+Issue: "${issue || 'Not specified'}".
+You MUST use the tool named "${outputToolName}" to return the corrected code. Do not provide explanations or conversational output outside of the tool.`;
+};
+
+/**
+ * System prompt for fixing linting errors.
+ */
+export const generateFixLintingSystemPrompt = (
+  outputToolName: string,
+  filePath?: string,
+  language?: string,
+  linter?: string,
+): string => {
+  return `You are a professional developer. Your task is to fix linting errors in the provided code snippet.
+File: ${filePath || 'unknown'}.
+Language: ${language || 'unknown'}.
+Linter: ${linter || 'unknown'}.
+You MUST use the tool named "${outputToolName}" to return the corrected code. Do not provide explanations or conversational output outside of the tool.`;
+};
+
+/**
+ * System prompt for fixing test failures.
+ */
+export const generateFixTestsSystemPrompt = (
+  outputToolName: string,
+  filePath?: string,
+  language?: string,
+  testFramework?: string,
+): string => {
+  return `You are a professional developer. Your task is to fix test failures based on the provided test output and code.
+File: ${filePath || 'unknown'}.
+Language: ${language || 'unknown'}.
+Test Framework: ${testFramework || 'unknown'}. 
+You MUST use the tool named "${outputToolName}" to return the corrected code. Do not provide explanations or conversational output outside of the tool.`;
+};
+
 /**
  * Generate a planning prompt for the agent
  */

@@ -111,12 +111,12 @@ const RepositoryAnalysisSchema = z.object({
 
 export type RepositoryAnalysis = z.infer<typeof RepositoryAnalysisSchema>;
 
-// Schema for fixed code output
-const FixedCodeSchema = z.object({
-  code: z.string().describe('The fixed code content'),
+// Schema for updated source code output
+const UpdatedSourceCodeSchema = z.object({
+  code: z.string().describe('The full, updated source code content.'),
 });
 
-export type FixedCode = z.infer<typeof FixedCodeSchema>;
+export type UpdatedSourceCode = z.infer<typeof UpdatedSourceCodeSchema>;
 
 /**
  * Create a tool for returning repository analysis results
@@ -135,52 +135,24 @@ export function createRepositoryAnalysisTool() {
 }
 
 /**
- * Create a tool for returning fixed code
+ * Create a unified tool for returning updated source code.
+ * The prompt/task given to the LLM should specify the reason for the update (e.g., bug fix, linting, test fix).
  */
-export function createFixCodeTool() {
+export function createUpdatedSourceCodeTool() {
   return createTool({
-    name: 'fixCode',
-    description: 'Return the fixed code after addressing the issue',
-    schema: FixedCodeSchema,
+    name: 'provideUpdatedCode',
+    description:
+      'Return the complete, updated source code based on the current task (e.g., fixing bugs, linting, or resolving test issues).',
+    schema: UpdatedSourceCodeSchema,
     execute: async params => {
+      // The tool's job is just to return the code provided by the LLM.
       return params;
     },
-    getReadableParams: () => {
-      return '';
-    },
-  });
-}
-
-/**
- * Create a tool for returning code with fixed linting issues
- */
-export function createFixLintingTool() {
-  return createTool({
-    name: 'fixLinting',
-    description: 'Return the code with fixed linting issues',
-    schema: FixedCodeSchema,
-    execute: async params => {
-      return params;
-    },
-    getReadableParams: () => {
-      return '';
-    },
-  });
-}
-
-/**
- * Create a tool for returning code with fixed test issues
- */
-export function createFixTestsTool() {
-  return createTool({
-    name: 'fixTests',
-    description: 'Return the code with fixed test issues',
-    schema: FixedCodeSchema,
-    execute: async params => {
-      return params;
-    },
-    getReadableParams: () => {
-      return '';
+    getReadableParams: params => {
+      // Return a snippet or indication that code is being provided.
+      return params.code
+        ? `(updated code provided: ${params.code.substring(0, 30)}...)`
+        : '(updated code provided)';
     },
   });
 }
