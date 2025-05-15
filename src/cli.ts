@@ -1,4 +1,3 @@
-import { Agent } from './llm/agent';
 import { createTool } from './llm/tools/types';
 import * as z from 'zod';
 import path from 'path';
@@ -25,7 +24,6 @@ const cliFinalResponseTool = createTool({
 
 async function runAgent(userInput: string) {
   const agent = createRepositoryAgent(path.resolve(process.cwd()), {
-    language: 'typescript',
     conversationalLogging: true,
   });
 
