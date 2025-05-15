@@ -29,31 +29,6 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 - Docker-based execution for security and isolation
 - OpenAI integration for code analysis and fixes
 
-## Development
-
-```bash
-# Install dependencies
-bun install
-
-# Start development server
-bun run dev
-
-# Run the CLI
-bun run cli
-
-# Lint code
-bun run lint
-
-# Format code
-bun run format
-
-# Build for production
-bun run build
-
-# Start production server
-bun run start
-```
-
 ## License
 
 Business Source License 1.1 (BSL 1.1)
