@@ -60,7 +60,7 @@ export async function handleAppMentionOnIssueJob(
     const botConfig = (await loadBotConfig(repoPath)) as BotConfig;
     logger.info({ botConfig }, 'Loaded bot configuration.');
 
-    const branchName = `ghbot/app/${jobId.substring(0, 12)}/${eventIssueNumber}`;
+    const branchName = `${envConfig.BOT_NAME}/${eventIssueNumber}`;
     await createBranch(git, branchName);
     logger.info({ branchName }, 'Created new branch.');
 
