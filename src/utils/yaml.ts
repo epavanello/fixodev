@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 import { BotConfig } from '../types/config';
 import { Runtime } from '../docker';
 
-const CONFIG_FILE = '.github/bot.yml';
+const CONFIG_FILE = '.reposister.yml';
 
 export const loadBotConfig = async (repoPath: string): Promise<BotConfig> => {
   try {

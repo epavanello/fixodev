@@ -180,7 +180,7 @@ MAX_CONCURRENT_JOBS=2
 
 ### 2.2 Bot Configuration File
 
-`.bot-config.yml` in user repositories:
+`.reposister.yml` in user repositories:
 
 ```yaml
 runtime: bun:latest

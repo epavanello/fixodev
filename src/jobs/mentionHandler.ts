@@ -9,9 +9,9 @@ import { createBranch, commitChanges, pushChanges } from '../git/operations';
 import { createPullRequest } from '../github/pr';
 import { loadBotConfig } from '../utils/yaml';
 import { JobError } from '../utils/error';
-import { applyChangesFromCommand, performAutomatedFixesAndFormat } from './commonJobLogic';
 import { envConfig } from '../config/env';
 import { ensureForkExists, ForkResult } from '../git/fork';
+import { processCodeModificationRequest } from '@/llm/processor';
 
 const handlerLogger = rootLogger.child({ context: 'MentionOnIssueJobHandler' });
 
@@ -102,22 +102,12 @@ export async function handleMentionOnIssueJob(job: ManagedJob): Promise<void> {
     await createBranch(git, branchName);
     logger.info({ branchName }, 'Created new branch.');
 
-    const filesWereChangedByCommand = await applyChangesFromCommand(
+    const filesWereChangedByCommand = await processCodeModificationRequest(
       commandToProcess,
       repoPath,
       botConfig,
-      jobId,
-      logger,
     );
     logger.info({ filesWereChangedByCommand }, 'Result of applying command changes.');
-
-    const filesWereChangedByAutomation = await performAutomatedFixesAndFormat(
-      repoPath,
-      botConfig,
-      jobId,
-      logger,
-    );
-    logger.info({ filesWereChangedByAutomation }, 'Result of automated fixes and formatting.');
 
     const status = await git.status();
     const hasPendingChanges = status.files.length > 0;

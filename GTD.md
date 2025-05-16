@@ -98,12 +98,12 @@
 
 ## 8. Bot Configuration Parser
 
-- [✓] Implement YAML parser for .bot-config.yml
+- [✓] Implement YAML parser for .reposister.yml
   - [✓] Create default configuration
   - [-] Validate user configuration (Basic loading implemented, but needs validation)
   - [✓] Merge defaults with user config
 - [✓] Add configuration discovery in repositories
-  - [✓] Check for .bot-config.yml in repo root
+  - [✓] Check for .reposister.yml in repo root
   - [✓] Fall back to defaults if not found
 
 ## 9. Logging and Error Handling
