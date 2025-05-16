@@ -47,9 +47,9 @@ const getBaseAgentConfig = (
 });
 
 /**
- * Create and configure an Agent for information analysis (read-only operations)
+ * Create and configure a unified Agent for analysis and modification (read and write operations)
  */
-export const createInformationAnalyzerAgent = (
+export const createUnifiedAgent = (
   context: CodeContext,
   repositoryPath: string,
   agentOptionOverrides?: Partial<AgentOptions>,
@@ -57,7 +57,7 @@ export const createInformationAnalyzerAgent = (
   const systemMessage =
     agentOptionOverrides?.systemMessage ||
     generateCodeAssistantSystemPrompt({
-      taskType: 'analyze',
+      taskType: 'analyze-and-fix',
       languages: [context.language || 'unknown'],
     });
 
@@ -67,39 +67,8 @@ export const createInformationAnalyzerAgent = (
     ...agentOptionOverrides,
   });
 
-  // Register read-only file system tools
-  agent.registerTool(createReadFileTool(repositoryPath));
-  agent.registerTool(createListDirectoryTool(repositoryPath));
-  agent.registerTool(createFileExistsTool(repositoryPath));
-
-  // Register search tools
-  agent.registerTool(createGrepTool(repositoryPath));
-  agent.registerTool(createFindFilesTool(repositoryPath));
-
-  return agent;
-};
-
-/**
- * Create and configure an Agent for source modification (read and write operations)
- */
-export const createSourceModifierAgent = (
-  context: CodeContext,
-  repositoryPath?: string,
-  agentOptionOverrides?: Partial<AgentOptions>,
-) => {
-  const defaultSystemMessage = generateCodeAssistantSystemPrompt({
-    taskType: 'feature',
-    languages: [context.language || 'unknown'],
-  });
-
-  const agent = new Agent({
-    ...getBaseAgentConfig(context, repositoryPath),
-    systemMessage: agentOptionOverrides?.systemMessage || defaultSystemMessage,
-    ...agentOptionOverrides,
-  });
-
-  // Register file system tools (including write)
   const effectiveRepoPath = repositoryPath || '.';
+  // Register read and write file system tools
   agent.registerTool(createReadFileTool(effectiveRepoPath));
   agent.registerTool(createWriteFileTool(effectiveRepoPath));
   agent.registerTool(createListDirectoryTool(effectiveRepoPath));
@@ -113,30 +82,36 @@ export const createSourceModifierAgent = (
 };
 
 /**
- * Analyze code using LLM
+ * Analyze and Fix code using LLM
  */
-export const analyzeCode = async (context: CodeContext, repositoryPath: string) => {
+export const analyzeAndFixCode = async (context: CodeContext, repositoryPath: string, code: string, issue?: string) => {
   try {
-    logger.info({ command: context.command, repositoryPath }, 'Analyzing repository for changes');
+    logger.info({ command: context.command, repositoryPath }, 'Analyzing and potentially fixing repository');
 
-    // Create information analyzer agent
-    const agent = createInformationAnalyzerAgent(context, repositoryPath);
+    // Create unified agent
+    const agent = createUnifiedAgent(context, repositoryPath);
 
-    // Run the agent with the command
-    const response = await agent.run(
-      `
+    // Prepare prompt
+    let prompt = `
       I need you to analyze this repository and suggest changes based on the following request:
       "${context.command}"
       
       First, explore the repository structure to understand what we're working with.
       Then, identify the files that need to be modified to implement the requested changes.
+    `;
+    if (issue) {
+      prompt += `
+      After analyzing, proceed to fix the issue: "${issue}"
       
-      Use the repositoryAnalysis tool to return your analysis results.
-    `,
-      {
-        outputTool: createRepositoryAnalysisTool(),
-      },
-    );
+      Code to be analyzed:
+      ${code}
+      `;
+    }
+
+    // Run the agent with the command
+    const response = await agent.run(prompt, {
+      outputTool: createUpdatedSourceCodeTool(),
+    });
 
     if (!response) {
       throw new Error('No response from agent');
@@ -147,138 +122,9 @@ export const analyzeCode = async (context: CodeContext, repositoryPath: string) 
       history: agent.getContext().getMessages(),
     };
   } catch (error) {
-    logger.error({ command: context.command, error }, 'Failed to analyze repository');
+    logger.error({ command: context.command, error }, 'Failed to analyze and/or fix repository');
     throw new GitHubError(
-      `Failed to analyze repository: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-};
-
-/**
- * Fix code issues using LLM
- */
-export const fixCode = async (
-  code: string,
-  issue: string,
-  context: CodeContext,
-  repositoryPath?: string,
-): Promise<string> => {
-  try {
-    logger.info({ filePath: context.filePath, repositoryPath }, 'Fixing code');
-    const outputTool = createUpdatedSourceCodeTool();
-    const systemMessage = generateFixCodeSystemPrompt(
-      outputTool.name,
-      context.filePath,
-      context.language,
-      issue,
-    );
-    const agent = createSourceModifierAgent(context, repositoryPath, { systemMessage });
-
-    const response = await agent.run(generateFixPrompt(code, issue, context), {
-      outputTool: outputTool,
-      toolChoice: 'required',
-    });
-
-    if (!response) {
-      throw new Error('No response from agent for fixCode');
-    }
-
-    logger.info({ filePath: context.filePath, repositoryPath }, 'Code fix completed.');
-    return response.code;
-  } catch (error) {
-    logger.error({ filePath: context.filePath, error, repositoryPath }, 'Failed to fix code');
-    throw new GitHubError(
-      `Failed to fix code: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-};
-
-/**
- * Fix linting issues using LLM
- */
-export const fixLinting = async (
-  code: string,
-  lintErrors: string[],
-  context: CodeContext,
-  repositoryPath?: string,
-): Promise<string> => {
-  try {
-    logger.info({ filePath: context.filePath, repositoryPath }, 'Fixing linting issues');
-    const outputTool = createUpdatedSourceCodeTool();
-    const systemMessage = generateFixLintingSystemPrompt(
-      outputTool.name,
-      context.filePath,
-      context.language,
-      context.linter?.name,
-    );
-
-    const agent = createSourceModifierAgent(context, repositoryPath, { systemMessage });
-
-    const prompt = generateLintFixPrompt(code, lintErrors, context);
-
-    const response = await agent.run(prompt, {
-      outputTool: outputTool,
-      toolChoice: { type: 'function', function: { name: outputTool.name } },
-    });
-
-    if (!response) {
-      throw new Error('No response from agent for fixLinting');
-    }
-
-    logger.info({ filePath: context.filePath, repositoryPath }, 'Linting fix completed.');
-    return response.code;
-  } catch (error) {
-    logger.error(
-      { filePath: context.filePath, error, repositoryPath },
-      'Failed to fix linting issues',
-    );
-    throw new GitHubError(
-      `Failed to fix linting issues: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-};
-
-/**
- * Fix test failures using LLM
- */
-export const fixTests = async (
-  code: string,
-  testOutput: string,
-  context: CodeContext,
-  repositoryPath?: string,
-): Promise<string> => {
-  try {
-    logger.info({ filePath: context.filePath, repositoryPath }, 'Fixing test failures');
-    const outputTool = createUpdatedSourceCodeTool();
-    const systemMessage = generateFixTestsSystemPrompt(
-      outputTool.name,
-      context.filePath,
-      context.language,
-      context.testFramework?.name,
-    );
-
-    const agent = createSourceModifierAgent(context, repositoryPath, { systemMessage });
-
-    const prompt = generateTestFixPrompt(code, testOutput, context);
-
-    const response = await agent.run(prompt, {
-      outputTool: outputTool,
-      toolChoice: { type: 'function', function: { name: outputTool.name } },
-    });
-
-    if (!response) {
-      throw new Error('No response from agent for fixTests');
-    }
-
-    logger.info({ filePath: context.filePath, repositoryPath }, 'Test fix completed.');
-    return response.code;
-  } catch (error) {
-    logger.error(
-      { filePath: context.filePath, error, repositoryPath },
-      'Failed to fix test failures',
-    );
-    throw new GitHubError(
-      `Failed to fix test failures: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to process repository: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 };
