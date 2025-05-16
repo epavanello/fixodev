@@ -2,8 +2,7 @@ import { ManagedJob } from './job';
 import { logger as rootLogger } from '../config/logger';
 import { JobError } from '../utils/error';
 import { isAppMentionJob, isUserMentionJob } from '../types/jobs';
-import { handleAppMentionOnIssueJob } from '@/jobs/appMentionHandler';
-import { handleUserMentionOnIssueJob } from '@/jobs/userMentionHandler';
+import { handleMentionOnIssueJob } from '@/jobs/mentionHandler';
 
 const logger = rootLogger.child({ context: 'JobWorker' });
 
@@ -21,10 +20,8 @@ export const processJob = async (job: ManagedJob): Promise<void> => {
   );
 
   try {
-    if (isAppMentionJob(job)) {
-      await handleAppMentionOnIssueJob(job);
-    } else if (isUserMentionJob(job)) {
-      await handleUserMentionOnIssueJob(job);
+    if (isAppMentionJob(job) || isUserMentionJob(job)) {
+      await handleMentionOnIssueJob(job);
     } else {
       // This case should ideally not be reached if job types are well-defined and handled upstream.
       logger.error({ job }, 'Unknown job type received in worker');
