@@ -1,5 +1,5 @@
 {
-  "name": "ghbot",
+  "name": "reposister",
   "version": "0.1.0",
   "description": "GitHub Bot for automated code fixes and improvements",
   "main": "dist/app.js",

@@ -73,7 +73,7 @@
 - Container configuration:
   ```typescript
   {
-    Image: 'ghbot/bun:latest',
+    Image: 'reposister/bun:latest',
     Cmd: ['sh', '-c', 'cd /workspace && bun install && bun run lint'],
     HostConfig: {
       Binds: [`${localRepoPath}:/workspace:ro`],
@@ -244,7 +244,7 @@ CMD ["bun", "dist/app.js"]
 
 Pre-built images for supported runtimes:
 
-- `ghbot/bun:latest` - Latest Bun version with common dev tools
+- `reposister/bun:latest` - Latest Bun version with common dev tools
 
 ## 4. Implementation Flow
 

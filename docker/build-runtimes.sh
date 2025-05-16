@@ -4,7 +4,7 @@
 set -e
 
 # Get the Docker runtime prefix from environment or use default
-DOCKER_RUNTIME_PREFIX=${DOCKER_RUNTIME_PREFIX:-ghbot}
+DOCKER_RUNTIME_PREFIX=${DOCKER_RUNTIME_PREFIX:-reposister}
 
 # Build Node.js 18 runtime
 echo "Building Node.js 18 runtime..."

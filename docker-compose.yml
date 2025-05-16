@@ -15,10 +15,10 @@ services:
     - repos:/app/repos
     - queue-data:/app/data
     networks:
-    - ghbot-network
+    - reposister-network
 
 networks:
-  ghbot-network:
+  reposister-network:
     driver: bridge
 
 volumes:
