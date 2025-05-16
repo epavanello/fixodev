@@ -174,11 +174,9 @@ export const fixCode = async (
     );
     const agent = createSourceModifierAgent(context, repositoryPath, { systemMessage });
 
-    const prompt = generateFixPrompt(code, issue, context);
-
-    const response = await agent.run(prompt, {
+    const response = await agent.run(generateFixPrompt(code, issue, context), {
       outputTool: outputTool,
-      toolChoice: { type: 'function', function: { name: outputTool.name } },
+      toolChoice: 'required',
     });
 
     if (!response) {
