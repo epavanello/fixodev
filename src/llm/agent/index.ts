@@ -138,7 +138,7 @@ export class Agent {
     {
       outputTool,
       toolChoice = 'auto',
-    }: { outputTool: Tool<PARAMS, OUTPUT>; toolChoice?: ChatCompletionToolChoiceOption },
+    }: { outputTool?: Tool<PARAMS, OUTPUT>; toolChoice?: ChatCompletionToolChoiceOption },
   ): Promise<OUTPUT | undefined> {
     try {
       // Add user message to context
@@ -149,7 +149,9 @@ export class Agent {
       let output: OUTPUT | undefined;
 
       const registryTools = this.context.getToolRegistry();
-      registryTools.register(outputTool);
+      if (outputTool) {
+        registryTools.register(outputTool);
+      }
       if (this.conversationalLogging) {
         registryTools.register(askUserTool);
       }
@@ -216,7 +218,7 @@ export class Agent {
 
               logger.debug({ toolName, toolArgs, iteration: currentIteration }, 'Tool call');
 
-              if (toolName === outputTool.name) {
+              if (outputTool && toolName === outputTool.name) {
                 needMoreProcessing = false;
                 output = await outputTool.execute(toolArgs);
               } else {

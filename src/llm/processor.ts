@@ -51,7 +51,6 @@ export const createSourceModifierAgent = (
   agentOptionOverrides?: Partial<AgentOptions>,
 ) => {
   const defaultSystemMessage = generateCodeAssistantSystemPrompt({
-    taskType: 'modify',
     languages: [context.language || context.botConfig?.runtime || 'unknown'],
   });
 
@@ -98,17 +97,20 @@ export const processCodeModificationRequest = async (
 
     const agent = createSourceModifierAgent(context, repositoryPath);
 
-    // The outputTool for the agent's run method is now taskCompletion.
-    // The agent will call this tool to signal it has finished.
-    const taskCompletionTool = createTaskCompletionTool();
+    let outputTool: ReturnType<typeof createTaskCompletionTool> | undefined;
+    if (!conversationalLogging) {
+      // The outputTool for the agent's run method is now taskCompletion.
+      // The agent will call this tool to signal it has finished.
+      outputTool = createTaskCompletionTool();
+    }
 
     const result = await agent.run(modificationRequest, {
-      outputTool: taskCompletionTool,
-      toolChoice: 'auto',
+      outputTool: outputTool,
+      toolChoice: 'required',
     });
 
     if (result) {
-      logger.info(
+      logger.debug(
         { result, modificationRequest, repositoryPath },
         'Code modification request processing completed by agent.',
       );

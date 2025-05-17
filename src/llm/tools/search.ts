@@ -4,6 +4,8 @@ import * as path from 'path';
 import fastGlob from 'fast-glob';
 import { createTool } from './types';
 
+const ignoreDirs = ['.git', 'node_modules', 'dist', 'build', 'coverage'];
+
 /**
  * Create a tool for searching code with regular expressions
  */
@@ -76,6 +78,7 @@ export const createGrepTool = (basePath: string) => {
           const files = await fastGlob(patterns, {
             onlyFiles: true,
             cwd: searchDir,
+            ignore: ignoreDirs?.map(d => `**/${d}/**`),
           });
 
           // Create regex for searching file contents
@@ -139,9 +142,16 @@ export const createGrepTool = (basePath: string) => {
 export const createFindFilesTool = (basePath: string) => {
   const schema = z.object({
     /**
-     * Pattern to search for in file names
+     * Pattern to search for in file names. Can be:
+     * - A simple glob pattern (e.g., "*.ts", "test*")
+     * - A regular expression (e.g., "test.*\\.ts$")
+     * - A simple text pattern (e.g., "test")
      */
-    pattern: z.string().describe('Pattern to search for in file names'),
+    pattern: z
+      .string()
+      .describe(
+        'Pattern to search for in file names. Can be a simple glob pattern, regex, or text pattern',
+      ),
 
     /**
      * Directory to search in, relative to the repository root
@@ -163,12 +173,13 @@ export const createFindFilesTool = (basePath: string) => {
     /**
      * Maximum number of results to return
      */
-    maxResults: z.number().optional().default(100).describe('Maximum number of results to return'),
+    maxResults: z.number().optional().default(20).describe('Maximum number of results to return'),
   });
 
   return createTool({
     name: 'findFiles',
-    description: 'Find files by name pattern',
+    description:
+      'Find files by name pattern. Supports glob patterns, regex, or simple text matching.',
     schema,
     execute: async params => {
       try {
@@ -191,10 +202,24 @@ export const createFindFilesTool = (basePath: string) => {
         const allFiles = await fastGlob(patterns, {
           onlyFiles: true,
           cwd: searchDir,
+          ignore: ignoreDirs?.map(d => `**/${d}/**`),
         });
 
+        // Convert glob pattern to regex if needed
+        let patternRegex: RegExp;
+        try {
+          // First try to use it as a regex
+          patternRegex = new RegExp(params.pattern, 'i');
+        } catch {
+          // If it fails, convert glob pattern to regex
+          const globPattern = params.pattern
+            .replace(/\./g, '\\.') // Escape dots
+            .replace(/\*/g, '.*') // Convert * to .*
+            .replace(/\?/g, '.'); // Convert ? to .
+          patternRegex = new RegExp(`^${globPattern}$`, 'i');
+        }
+
         // Filter by pattern in filename
-        const patternRegex = new RegExp(params.pattern, 'i');
         const files = allFiles
           .filter(file => patternRegex.test(path.basename(file)))
           .slice(0, params.maxResults)
