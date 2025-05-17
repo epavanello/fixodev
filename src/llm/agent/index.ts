@@ -232,7 +232,13 @@ export class Agent {
                 logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
 
                 if (this.conversationalLogging) {
-                  console.log(`🔨 ${toolName}(${tool.getReadableParams?.(toolArgs)})`);
+                  console.log(
+                    `🔨 ${toolName}(${tool.getReadableParams?.(toolArgs)})\n${JSON.stringify(
+                      result,
+                      null,
+                      2,
+                    )}`,
+                  );
                 }
 
                 // Add tool result to context

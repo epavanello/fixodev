@@ -17,12 +17,14 @@ export const createGrepTool = (basePath: string) => {
     pattern: z.string().describe('Regular expression pattern to search for'),
 
     /**
-     * Paths or globs to search in, relative to the repository root
+     * Paths or globs to search in, relative to the repository root. Each entry can be a directory path (for recursive search) or a direct file path. Directories are searched recursively applying extension filters. Files are searched directly, respecting extension filters.
      */
     paths: z
       .array(z.string())
       .optional()
-      .describe('Paths or globs to search in, relative to the repository root'),
+      .describe(
+        'Paths or globs to search in, relative to the repository root. Each entry can be a directory path (for recursive search) or a direct file path. Directories are searched recursively applying extension filters. Files are searched directly, respecting extension filters.',
+      ),
 
     /**
      * File extensions to include (e.g., '.ts', '.js')
@@ -53,79 +55,101 @@ export const createGrepTool = (basePath: string) => {
     schema,
     execute: async params => {
       try {
-        // Prepare the glob patterns
-        const baseSearchDirs = params.paths?.length
-          ? params.paths.map(p => path.join(basePath, p))
-          : [basePath];
-
         const allResults: Array<{ filePath: string; lineNumber: number; content: string }> = [];
+        const regex = new RegExp(params.pattern, params.caseSensitive ? '' : 'i');
+        const normalizedExtensions = params.extensions?.map(ext =>
+          ext.startsWith('.') ? ext : `.${ext}`,
+        );
 
-        // Search in each base directory
-        for (const searchDir of baseSearchDirs) {
-          // Create glob patterns for extensions
-          const patterns: string[] = [];
-
-          if (params.extensions?.length) {
-            for (const ext of params.extensions) {
-              const extension = ext.startsWith('.') ? ext : `.${ext}`;
-              patterns.push(`**/*${extension}`);
+        const processFileContent = async (filePath: string, fileContent: string) => {
+          const lines = fileContent.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (allResults.length >= params.maxResults) break;
+            if (regex.test(lines[i])) {
+              const relativePath = path.relative(basePath, filePath);
+              allResults.push({
+                filePath: relativePath,
+                lineNumber: i + 1, // 1-indexed line numbers
+                content: lines[i],
+              });
             }
-          } else {
-            patterns.push(`**/*`);
+          }
+        };
+
+        const baseEntries = params.paths?.length
+          ? params.paths.map(p => path.join(basePath, p))
+          : [basePath]; // If no paths, consider basePath as the single entry to process
+
+        for (const entryPath of baseEntries) {
+          if (allResults.length >= params.maxResults) break;
+
+          let stats;
+          try {
+            stats = await fs.stat(entryPath);
+          } catch (e) {
+            // console.warn(`Skipping path ${entryPath} due to stat error: ${(e as Error).message}`);
+            continue; // Path doesn't exist or other stat error
           }
 
-          // Find all matching files
-          const files = await fastGlob(patterns, {
-            onlyFiles: true,
-            cwd: searchDir,
-            ignore: ignoreDirs?.map(d => `**/${d}/**`),
-          });
+          if (stats.isDirectory()) {
+            const searchDir = entryPath;
+            const globPatterns: string[] = [];
 
-          // Create regex for searching file contents
-          const regex = new RegExp(params.pattern, params.caseSensitive ? '' : 'i');
-
-          // Process files and search for matches
-          for (const file of files) {
-            // Check if we've hit the max results
-            if (allResults.length >= params.maxResults) {
-              break;
+            if (normalizedExtensions?.length) {
+              for (const ext of normalizedExtensions) {
+                globPatterns.push(`**/*${ext}`);
+              }
+            } else {
+              globPatterns.push('**/*');
             }
 
             try {
-              const filePath = path.join(searchDir, file);
-              const content = await fs.readFile(filePath, 'utf-8');
-              const lines = content.split('\n');
+              const filesInDir = await fastGlob(globPatterns, {
+                onlyFiles: true,
+                cwd: searchDir,
+                ignore: ignoreDirs?.map(d => `**/${d}/**`),
+                dot: true, // Include hidden files if not in ignoreDirs
+              });
 
-              for (let i = 0; i < lines.length; i++) {
-                if (regex.test(lines[i])) {
-                  // Convert to relative path from basePath
-                  const relativePath = path.relative(basePath, filePath);
-
-                  allResults.push({
-                    filePath: relativePath,
-                    lineNumber: i + 1, // 1-indexed line numbers
-                    content: lines[i],
-                  });
-
-                  // Check if we've hit the max results
-                  if (allResults.length >= params.maxResults) {
-                    break;
-                  }
+              for (const fileRelativeName of filesInDir) {
+                if (allResults.length >= params.maxResults) break;
+                const absoluteFilePath = path.join(searchDir, fileRelativeName);
+                try {
+                  const content = await fs.readFile(absoluteFilePath, 'utf-8');
+                  await processFileContent(absoluteFilePath, content);
+                } catch (err) {
+                  // console.warn(`Skipping file ${absoluteFilePath} in directory scan due to read error: ${(err as Error).message}`);
+                  // Skip files that can't be read
+                  continue;
                 }
               }
+            } catch (globError) {
+              // console.warn(`Error globbing in directory ${searchDir}: ${(globError as Error).message}`);
+              continue;
+            }
+          } else if (stats.isFile()) {
+            const filePath = entryPath;
+            if (normalizedExtensions?.length) {
+              const fileExt = path.extname(filePath);
+              if (!normalizedExtensions.includes(fileExt)) {
+                continue; // Skip if extension doesn't match
+              }
+            }
+
+            if (allResults.length >= params.maxResults) break; // Check before reading the file
+
+            try {
+              const content = await fs.readFile(filePath, 'utf-8');
+              await processFileContent(filePath, content);
             } catch (err) {
+              // console.warn(`Skipping file ${filePath} due to read error: ${(err as Error).message}`);
               // Skip files that can't be read
               continue;
             }
           }
-
-          // Check if we've hit the max results
-          if (allResults.length >= params.maxResults) {
-            break;
-          }
+          // No need for an explicit break here for maxResults, as inner loops and checks handle it.
         }
-
-        return { results: allResults };
+        return { results: allResults.slice(0, params.maxResults) }; // Ensure results are capped
       } catch (error) {
         return {
           results: [],
