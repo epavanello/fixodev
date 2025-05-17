@@ -4,12 +4,7 @@ import { jobQueue } from '../queue';
 import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
 import { AppMentionOnIssueJob } from '../types/jobs';
-import {
-  WebhookEventName,
-  IssuesOpenedEvent,
-  IssueCommentCreatedEvent,
-  WebhookEvent as OctokitWebhookEvent,
-} from '@octokit/webhooks-types';
+import { WebhookEventName, WebhookEvent as OctokitWebhookEvent } from '@octokit/webhooks-types';
 import { isIssueCommentEvent, isIssueEvent } from '@/types/guards';
 
 const BOT_MENTION = `@${envConfig.BOT_NAME}`.toLowerCase();

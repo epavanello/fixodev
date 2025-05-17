@@ -33,6 +33,7 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 ## Deployment Strategies
 
 Deployment is streamlined using Docker Compose.
+
 ### Docker Compose Setup
 ```yaml
 docker-compose.yml configuration includes services for a Bun-based application with options for environment variables, volume mounts, and networking.

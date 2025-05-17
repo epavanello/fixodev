@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { logger } from './config/logger';
 import { appConfig } from './config/app';
 import { jobQueue } from './queue';
-import { saveQueueToDisk } from './queue/persistence';
 import { webhookRouter } from './routes/webhook';
 import { rootRouter } from './routes/root';
 import { startNotificationPolling } from './polling/notificationPoller';

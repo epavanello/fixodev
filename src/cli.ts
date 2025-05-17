@@ -26,6 +26,7 @@ async function main() {
         console.error('🔴 No input provided. Exiting.');
         process.exit(1);
       }
+
       try {
         const result = await processCodeModificationRequest(
           userInput,
