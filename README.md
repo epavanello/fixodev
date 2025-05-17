@@ -2,6 +2,16 @@
 
 A GitHub App-based bot that automates code fixes and improvements through AI.
 
+## How to use
+
+1. Install the GitHub App on your repository.
+2. Configure the app settings as needed in your GitHub repository settings.
+3. Trigger the bot using one of the following ways (bot name: `@RepoSister`):
+    1. by pushing code changes to your repository
+    1. by creating an issue mentioning the bot
+    1. by creating a pull request mentioning the bot
+    1. by commenting on the pull request mentioning the bot
+
 ## Features
 
 - GitHub App with webhook handling
