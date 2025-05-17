@@ -96,22 +96,14 @@ export class Agent {
     this.maxIterations = options.maxIterations || 5;
     this.conversationalLogging = options.conversationalLogging || false;
 
-    // Initialize OpenAI client
     this.openai = openai;
-
-    // Initialize tool registry
     const toolRegistry = new ToolRegistry();
-
-    // Initialize memory store
     const memory = new MemoryStore();
-
-    // Construct the system message
     let systemMessage = options.systemMessage || 'You are a helpful AI assistant.';
 
     const contextPreamble = `You are an AI assistant operating within the local directory: '${this.basePath}'.`;
     systemMessage = `${contextPreamble} ${systemMessage}`;
 
-    // Initialize context
     this.context = new AgentContext({
       toolRegistry,
       memory,
@@ -141,7 +133,6 @@ export class Agent {
     }: { outputTool?: Tool<PARAMS, OUTPUT>; toolChoice?: ChatCompletionToolChoiceOption },
   ): Promise<OUTPUT | undefined> {
     try {
-      // Add user message to context
       this.context.addUserMessage(input);
 
       let currentIteration = 0;
