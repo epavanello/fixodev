@@ -92,7 +92,7 @@ export const processCodeModificationRequest = async (
       language: botConfig.runtime,
       botConfig,
       conversationalLogging,
-      maxIterations: 25,
+      maxIterations: 50,
     };
 
     const agent = createSourceModifierAgent(context, repositoryPath);

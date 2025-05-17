@@ -32,6 +32,7 @@ async function main() {
           userInput,
           path.resolve(process.cwd()),
           await loadBotConfig(path.resolve(process.cwd())),
+          true,
         );
 
         if (!result) {
