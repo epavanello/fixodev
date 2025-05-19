@@ -201,3 +201,42 @@ export const createListDirectoryTool = (basePath: string) => {
     },
   });
 };
+
+/**
+ * Create a tool for showing the file tree
+ */
+export const createShowFileTreeTool = (basePath: string) => {
+  const schema = z.object({
+    /**
+     * Path to the directory, relative to the base path
+     */
+    path: z.string().describe('Path to the directory, relative to the repository root'),
+  });
+
+  return wrapTool({
+    name: 'showFileTree',
+    description: 'Show the file tree of a directory',
+    schema,
+    execute: async params => {
+      try {
+        const dirPath = join(basePath, params.path);
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        const tree = entries.map(entry => ({
+          name: entry.name,
+          isDirectory: entry.isDirectory(),
+        }));
+
+        return {
+          path: params.path,
+          tree,
+        };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          throw new Error(`Directory not found: ${params.path}`);
+        }
+        throw error;
+      }
+    },
+  });
+};

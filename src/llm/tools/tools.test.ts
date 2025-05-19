@@ -4,6 +4,7 @@ import {
   createWriteFileTool,
   createFileExistsTool,
   createListDirectoryTool,
+  createShowFileTreeTool,
 } from './file';
 import { createGrepTool, createFindFilesTool } from './search';
 
@@ -16,6 +17,7 @@ describe('File Tools', () => {
   const writeFileTool = createWriteFileTool(basePath);
   const fileExistsTool = createFileExistsTool(basePath);
   const listDirectoryTool = createListDirectoryTool(basePath);
+  const showFileTreeTool = createShowFileTreeTool(basePath);
 
   describe('readFile', () => {
     it('should read a file successfully', async () => {
@@ -133,6 +135,20 @@ describe('File Tools', () => {
 
       expect(result).toBeDefined();
       expect(result.files).toContain('nested.txt');
+    });
+  });
+
+  describe('showFileTree', () => {
+    it('should show the file tree of a directory', async () => {
+      const result = await showFileTreeTool.callback({
+        path: 'test-samples',
+      });
+
+      expect(result).toBeDefined();
+      expect(result.tree).toBeDefined();
+      expect(Array.isArray(result.tree)).toBe(true);
+      expect(result.tree.some(entry => entry.name === 'sample.txt')).toBe(true);
+      expect(result.tree.some(entry => entry.name === 'subdir')).toBe(true);
     });
   });
 });
