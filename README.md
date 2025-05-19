@@ -19,6 +19,12 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 - AI-powered code fixes using LLM
 - Automated PR creation
 
+## Supported Tools
+
+- **readonlyTools**: Tools that allow reading from the codebase without making modifications.
+- **writableTools**: Tools that can modify the codebase, enabling the bot to apply fixes and improvements.
+- **searchTools**: Tools that assist in searching through the codebase for specific patterns or files.
+
 ## Setup
 
 1. Clone the repository
