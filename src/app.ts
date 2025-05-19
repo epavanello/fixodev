@@ -11,7 +11,7 @@ import { envConfig } from './config/env';
 const app = new Hono();
 
 // Register routes
-app.route('/api/webhooks', webhookRouter);
+app.route('/api/webhooks/', webhookRouter);
 app.route('/', rootRouter);
 
 // Start the server
