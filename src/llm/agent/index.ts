@@ -160,6 +160,7 @@ export class RepoAgent {
           messages,
           tools,
           toolChoice: toolChoice,
+          maxSteps: 10,
         });
 
         // Extract the response content and tool calls
