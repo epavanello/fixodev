@@ -1,7 +1,4 @@
-import OpenAI from 'openai';
-import { envConfig } from '../config/env';
+import { openrouter } from '@openrouter/ai-sdk-provider';
 
 // Initialize OpenAI client
-export const openai = new OpenAI({
-  apiKey: envConfig.OPENAI_API_KEY,
-});
+export const coderModel = openrouter('openai/gpt-4o-mini');

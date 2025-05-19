@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import readline from 'readline/promises';
 import { processCodeModificationRequest } from './llm/processor';
 import { loadBotConfig } from './utils/yaml';
+import { createTaskCompletionTool } from './llm/tools';
 
 async function main() {
   const program = new Command();
@@ -33,14 +34,12 @@ async function main() {
           path.resolve(process.cwd()),
           await loadBotConfig(path.resolve(process.cwd())),
           true,
+          createTaskCompletionTool(),
         );
 
-        if (!result) {
+        if (!result?.objectiveAchieved) {
           // This might happen if maxIterations is reached before the output tool is called
-          console.warn(
-            '\n⚠️ Agent finished, but no explicit output was captured via the output tool.',
-          );
-          console.warn('This could be due to reaching max iterations or an unexpected agent flow.');
+          console.warn(`\n⚠️ Agent finished, reason: ${result?.reasonOrOutput}.`);
         }
       } catch (error) {
         console.error('\n❌ Error running agent:', error);

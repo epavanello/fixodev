@@ -1,29 +1,30 @@
 import * as z from 'zod';
-import { Tool, DefaultTool, createTool } from './types';
+import { WrappedTool, wrapTool } from './types';
+import { ToolSet } from 'ai';
 
 /**
  * Registry for managing tools available to the LLM agent
  */
 export class ToolRegistry {
-  private tools = new Map<string, DefaultTool>();
+  private tools = new Map<string, WrappedTool<any, any>>();
 
   /**
    * Register a new tool in the registry
    */
-  register<T extends z.ZodType, R>(tool: Tool<T, R>): this {
+  register<PARAMS extends z.ZodType, OUTPUT>(tool: WrappedTool<PARAMS, OUTPUT>): this {
     if (this.tools.has(tool.name)) {
       throw new Error(`Tool with name "${tool.name}" is already registered`);
     }
 
-    this.tools.set(tool.name, tool as unknown as DefaultTool);
+    this.tools.set(tool.name, tool);
     return this;
   }
 
   /**
    * Get a tool by name
    */
-  get<T extends z.ZodType, R>(name: string): Tool<T, R> | undefined {
-    return this.tools.get(name) as Tool<T, R> | undefined;
+  get(name: string): WrappedTool | undefined {
+    return this.tools.get(name) as WrappedTool | undefined;
   }
 
   /**
@@ -36,39 +37,18 @@ export class ToolRegistry {
   /**
    * Get all registered tools
    */
-  getAllTools(): DefaultTool[] {
+  getAllTools(): WrappedTool[] {
     return Array.from(this.tools.values());
   }
 
   /**
-   * Get JSON schema for all registered tools
+   * Get all registered tools in the format expected by the AI SDK
    */
-  getToolsJSONSchema() {
-    return this.getAllTools().map(tool => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.getParameterJSONSchema(),
-      },
-    }));
-  }
-
-  /**
-   * Execute a tool by name with provided parameters
-   */
-  async execute<R>(name: string, params: unknown): Promise<R> {
-    const tool = this.tools.get(name);
-
-    if (!tool) {
-      throw new Error(`Tool "${name}" not found`);
-    }
-
-    // Validate parameters against the tool's schema
-    const validatedParams = tool.schema.parse(params);
-
-    // Execute the tool with validated parameters
-    return tool.execute(validatedParams) as Promise<R>;
+  getUnwrappedTools(): ToolSet {
+    return this.getAllTools().reduce((acc, wrappedTool) => {
+      acc[wrappedTool.name] = wrappedTool.tool;
+      return acc;
+    }, {} as ToolSet);
   }
 }
 
@@ -76,23 +56,24 @@ export class ToolRegistry {
  * Create a task completion tool that allows the agent to signal when a task is complete
  */
 export function createTaskCompletionTool() {
-  return createTool({
+  return wrapTool({
     name: 'taskCompletion',
     description: 'Signal whether the objective has been achieved or not',
     schema: z.object({
       objectiveAchieved: z
         .boolean()
         .describe('Whether the objective has been successfully achieved'),
-      reason: z.string().describe('Explanation of why the objective was or was not achieved'),
+      reasonOrOutput: z
+        .string()
+        .describe(
+          'Explanation of why the objective was or was not achieved, or the output of the task if it was successful',
+        ),
     }),
     execute: async params => {
       return {
         objectiveAchieved: params.objectiveAchieved,
-        reason: params.reason,
+        reasonOrOutput: params.reasonOrOutput,
       };
-    },
-    getReadableParams: ({ objectiveAchieved }) => {
-      return JSON.stringify({ done: objectiveAchieved });
     },
   });
 }
@@ -122,7 +103,7 @@ export type UpdatedSourceCode = z.infer<typeof UpdatedSourceCodeSchema>;
  * Create a tool for returning repository analysis results
  */
 export function createRepositoryAnalysisTool() {
-  return createTool({
+  return wrapTool({
     name: 'repositoryAnalysis',
     description: 'Return the analysis results for repository changes',
     schema: RepositoryAnalysisSchema,
@@ -139,7 +120,7 @@ export function createRepositoryAnalysisTool() {
  * The prompt/task given to the LLM should specify the reason for the update (e.g., bug fix, linting, test fix).
  */
 export function createUpdatedSourceCodeTool() {
-  return createTool({
+  return wrapTool({
     name: 'provideUpdatedCode',
     description:
       'Return the complete, updated source code based on the current task (e.g., fixing bugs, linting, or resolving test issues).',

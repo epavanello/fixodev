@@ -1,17 +1,12 @@
-import OpenAI from 'openai';
-import {
-  ChatCompletionRole,
-  ChatCompletionMessageParam,
-} from 'openai/resources/chat/completions/completions';
-import { AgentContext, Message, ToolCallSchema } from './context';
+import { AgentContext } from './context';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
-import { Tool } from '../tools/types';
-import * as z from 'zod';
-import { openai } from '../client';
+import { ToolParameters, WrappedTool } from '../tools/types';
+import { coderModel } from '../client';
 import { askUserTool } from '../tools/interactive';
-import { ChatCompletionToolChoiceOption } from 'openai/src/resources.js';
+import { CoreMessage, generateText, LanguageModelV1 } from 'ai';
+import { z } from 'zod';
 
 /**
  * Options for creating an agent
@@ -23,9 +18,9 @@ export interface AgentOptions {
   basePath: string;
 
   /**
-   * The OpenAI model to use
+   * The model to use
    */
-  model?: string;
+  model?: LanguageModelV1;
 
   /**
    * The system message to use
@@ -43,11 +38,6 @@ export interface AgentOptions {
   reservedTokens?: number;
 
   /**
-   * The OpenAI API key to use (defaults to environment variable)
-   */
-  apiKey?: string;
-
-  /**
    * Maximum number of iterations for a single task
    */
   maxIterations?: number;
@@ -60,7 +50,7 @@ export interface AgentOptions {
   /**
    * History of messages to include in the prompt
    */
-  history?: Message[];
+  history?: CoreMessage[];
 }
 
 /**
@@ -81,10 +71,9 @@ export interface AgentStep {
 /**
  * LLM Agent for interacting with code
  */
-export class Agent {
+export class RepoAgent {
   private context: AgentContext;
-  private openai: OpenAI;
-  private model: string;
+  private model: LanguageModelV1;
   private basePath: string;
   private steps: AgentStep[] = [];
   private maxIterations: number;
@@ -92,11 +81,10 @@ export class Agent {
 
   constructor(options: AgentOptions) {
     this.basePath = options.basePath;
-    this.model = options.model || 'gpt-4o';
+    this.model = options.model || coderModel;
     this.maxIterations = options.maxIterations || 5;
     this.conversationalLogging = options.conversationalLogging || false;
 
-    this.openai = openai;
     const toolRegistry = new ToolRegistry();
     const memory = new MemoryStore();
     let systemMessage = options.systemMessage || 'You are a helpful AI assistant.';
@@ -117,7 +105,7 @@ export class Agent {
   /**
    * Register a tool with the agent
    */
-  registerTool<T extends z.ZodType, R>(tool: Tool<T, R>): this {
+  registerTool<PARAMS extends z.ZodType, OUTPUT>(tool: WrappedTool<PARAMS, OUTPUT>): this {
     this.context.getToolRegistry().register(tool);
     return this;
   }
@@ -125,12 +113,12 @@ export class Agent {
   /**
    * Run the agent with a given input, iterating until task completion or max iterations
    */
-  async run<PARAMS extends z.ZodType, OUTPUT>(
+  async run<PARAMS extends ToolParameters, OUTPUT>(
     input: string,
     {
       outputTool,
       toolChoice = 'auto',
-    }: { outputTool?: Tool<PARAMS, OUTPUT>; toolChoice?: ChatCompletionToolChoiceOption },
+    }: { outputTool?: WrappedTool<PARAMS, OUTPUT>; toolChoice?: 'auto' | 'none' | 'required' },
   ): Promise<OUTPUT | undefined> {
     try {
       this.context.addUserMessage(input);
@@ -147,7 +135,7 @@ export class Agent {
         registryTools.register(askUserTool);
       }
 
-      const tools = registryTools.getToolsJSONSchema();
+      const tools = registryTools.getUnwrappedTools();
 
       logger.debug({ tools }, 'Tools');
       while (needMoreProcessing && currentIteration < this.maxIterations) {
@@ -159,7 +147,7 @@ export class Agent {
         );
 
         // Get the current conversation for the prompt
-        const messages = this.convertToOpenAIMessages(this.context.getPromptMessages());
+        const messages = this.context.getPromptMessages();
 
         logger.debug({ messages, iteration: currentIteration }, 'Agent request');
         if (this.conversationalLogging) {
@@ -167,16 +155,15 @@ export class Agent {
         }
 
         // Send the request to OpenAI
-        const response = await this.openai.chat.completions.create({
+        const response = await generateText<any>({
           model: this.model,
           messages,
           tools,
-          tool_choice: toolChoice,
-          parallel_tool_calls: true,
+          toolChoice: toolChoice,
         });
 
         // Extract the response content and tool calls
-        const responseMessage = response.choices[0].message;
+        const responseMessage = response.text;
 
         logger.debug({ responseMessage, iteration: currentIteration }, 'Agent response');
         if (this.conversationalLogging) {
@@ -185,91 +172,30 @@ export class Agent {
         }
 
         // Set default for this iteration's outcome
-        let iterationOutput = responseMessage.content || '';
+        let iterationOutput = responseMessage || '';
 
         // Check if the LLM wants to call tools
-        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-          // Add the assistant response with tool calls to the context
-          const toolCalls = responseMessage.tool_calls.map(toolCall => {
-            const toolName = toolCall.function.name;
-            const toolArgs = JSON.parse(toolCall.function.arguments);
-            return ToolCallSchema.parse({
-              id: toolCall.id,
-              name: toolName,
-              arguments: toolArgs,
-            });
-          });
+        for (const toolResult of response.toolResults) {
+          const toolName = toolResult.toolName;
 
-          this.context.addAssistantToolCallMessage(responseMessage.content || '', toolCalls);
-
-          for (const toolCall of responseMessage.tool_calls) {
-            try {
-              const toolName = toolCall.function.name;
-              const toolArgs = JSON.parse(toolCall.function.arguments);
-
-              logger.debug({ toolName, toolArgs, iteration: currentIteration }, 'Tool call');
-
-              if (outputTool && toolName === outputTool.name) {
-                needMoreProcessing = false;
-                output = await outputTool.execute(toolArgs);
-              } else {
-                const tool = registryTools.get(toolName);
-                if (!tool) {
-                  throw new Error(`Tool ${toolName} not found`);
-                }
-                // Execute the tool
-                const result = await tool.execute(toolArgs);
-
-                logger.debug({ toolName, result, iteration: currentIteration }, 'Tool result');
-
-                if (this.conversationalLogging) {
-                  console.log(
-                    `🔨 ${toolName}(${tool.getReadableParams?.(toolArgs)})\n${JSON.stringify(
-                      result,
-                      null,
-                      2,
-                    )}`,
-                  );
-                }
-
-                // Add tool result to context
-                this.context.addToolResultMessage(toolCall.id, toolName, JSON.stringify(result));
-
-                // Record the tool call in memory
-                const toolCallObj = ToolCallSchema.parse({
-                  id: toolCall.id,
-                  name: toolName,
-                  arguments: toolArgs,
-                });
-
-                this.context.recordToolCall(toolCallObj, result);
-              }
-            } catch (error) {
-              // Handle tool execution error
-              const errorMessage = `Error executing tool: ${(error as Error).message}`;
-
-              logger.error({ error, iteration: currentIteration }, errorMessage);
-              if (this.conversationalLogging) {
-                console.log(`⚠️ Error using tool ${toolCall.function.name}: ${errorMessage}`);
-              }
-
-              // Add error as tool result
-              this.context.addToolResultMessage(
-                toolCall.id,
-                toolCall.function.name,
-                JSON.stringify({ error: errorMessage }),
-              );
-            }
+          if (outputTool && toolName === outputTool.name) {
+            needMoreProcessing = false;
+            output = toolResult.result;
+          } else {
+            // // Add tool result to context
+            this.context.addToolResultMessage(toolResult);
           }
-        } else {
-          // No tool calls, just add content as a message and continue or finish
-          iterationOutput = responseMessage.content || '';
-          if (this.conversationalLogging && iterationOutput) {
-            console.log(`🤖 Assistant:\n${iterationOutput}`);
-          }
+        }
 
+        // No tool calls, just add content as a message and continue or finish
+        iterationOutput = responseMessage || '';
+        if (this.conversationalLogging && iterationOutput) {
+          console.log(`🤖 Assistant:\n${iterationOutput}`);
+        }
+
+        if (responseMessage) {
           // Add assistant message to context
-          this.context.addAssistantMessage(iterationOutput);
+          this.context.addAssistantMessage(responseMessage);
         }
       }
 
@@ -307,51 +233,5 @@ export class Agent {
    */
   getSteps(): AgentStep[] {
     return [...this.steps];
-  }
-
-  /**
-   * Convert internal message format to OpenAI's message format
-   */
-  private convertToOpenAIMessages(
-    messages: { role: ChatCompletionRole; content: string; name?: string; tool_call_id?: string }[],
-  ): ChatCompletionMessageParam[] {
-    return messages.map(msg => {
-      if (msg.role === 'function' && msg.tool_call_id) {
-        // Function/tool response
-        return {
-          role: msg.role,
-          content: msg.content,
-          name: msg.name,
-          tool_call_id: msg.tool_call_id,
-        } as ChatCompletionMessageParam;
-      } else if (msg.role === 'assistant' && msg.name) {
-        // Assistant with name
-        return {
-          role: msg.role,
-          content: msg.content,
-          name: msg.name,
-        } as ChatCompletionMessageParam;
-      } else if (msg.role === 'system') {
-        // System message
-        return {
-          role: msg.role,
-          content: msg.content,
-        } as ChatCompletionMessageParam;
-      } else if (msg.role === 'user') {
-        // User message
-        return {
-          role: msg.role,
-          content: msg.content,
-          ...(msg.name ? { name: msg.name } : {}),
-        } as ChatCompletionMessageParam;
-      }
-
-      // Default case
-      return {
-        role: msg.role,
-        content: msg.content,
-        ...(msg.name ? { name: msg.name } : {}),
-      } as ChatCompletionMessageParam;
-    });
   }
 }

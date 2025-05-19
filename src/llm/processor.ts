@@ -1,7 +1,6 @@
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
-import { Agent, AgentOptions } from './agent';
-import { Message } from './agent/context';
+import { RepoAgent, AgentOptions } from './agent';
 import {
   createReadFileTool,
   createWriteFileTool,
@@ -10,8 +9,10 @@ import {
 } from './tools/file';
 import { createGrepTool, createFindFilesTool } from './tools/search';
 import { generateCodeAssistantSystemPrompt } from './prompts/system';
-import { createTaskCompletionTool } from './tools/registry';
 import { BotConfig } from '../types/config';
+import { CoreMessage, LanguageModelV1 } from 'ai';
+import { coderModel } from './client';
+import { ToolParameters, WrappedTool } from './tools/types';
 
 export interface CodeContext {
   filePath?: string;
@@ -22,8 +23,8 @@ export interface CodeContext {
   projectType?: string;
   command?: string;
   conversationalLogging?: boolean;
-  history?: Message[];
-  model?: string;
+  history?: CoreMessage[];
+  model?: LanguageModelV1;
   maxIterations?: number;
   botConfig?: BotConfig;
 }
@@ -36,7 +37,7 @@ const getBaseAgentConfig = (
   repositoryPath?: string,
 ): Omit<AgentOptions, 'systemMessage'> => ({
   basePath: repositoryPath || '.',
-  model: context.model || 'gpt-4o',
+  model: context.model || coderModel,
   maxIterations: context.maxIterations || 25,
   conversationalLogging: context.conversationalLogging,
   history: context.history,
@@ -54,7 +55,7 @@ export const createSourceModifierAgent = (
     languages: [context.language || context.botConfig?.runtime || 'unknown'],
   });
 
-  const agent = new Agent({
+  const agent = new RepoAgent({
     ...getBaseAgentConfig(context, repositoryPath),
     systemMessage: agentOptionOverrides?.systemMessage || defaultSystemMessage,
     ...agentOptionOverrides,
@@ -80,12 +81,13 @@ export const createSourceModifierAgent = (
  * and apply necessary changes across the codebase.
  * Returns true if the agent indicated successful completion and potentially made changes.
  */
-export const processCodeModificationRequest = async (
+export const processCodeModificationRequest = async <PARAMS extends ToolParameters, OUTPUT>(
   modificationRequest: string,
   repositoryPath: string,
   botConfig: BotConfig,
-  conversationalLogging: boolean = process.env.NODE_ENV === 'development',
-): Promise<boolean> => {
+  conversationalLogging: boolean = false,
+  outputTool?: WrappedTool<PARAMS, OUTPUT> | undefined,
+): Promise<OUTPUT | undefined> => {
   try {
     const context: CodeContext = {
       command: modificationRequest,
@@ -97,13 +99,6 @@ export const processCodeModificationRequest = async (
 
     const agent = createSourceModifierAgent(context, repositoryPath);
 
-    let outputTool: ReturnType<typeof createTaskCompletionTool> | undefined;
-    if (!conversationalLogging) {
-      // The outputTool for the agent's run method is now taskCompletion.
-      // The agent will call this tool to signal it has finished.
-      outputTool = createTaskCompletionTool();
-    }
-
     const result = await agent.run(modificationRequest, {
       outputTool: outputTool,
       toolChoice: 'required',
@@ -114,13 +109,13 @@ export const processCodeModificationRequest = async (
         { result, modificationRequest, repositoryPath },
         'Code modification request processing completed by agent.',
       );
-      return result.objectiveAchieved;
+      return result;
     } else {
       logger.warn(
         { modificationRequest, repositoryPath },
         'Agent did not return a result from taskCompletion tool for modification request (e.g. max iterations reached without completion signal).',
       );
-      return false;
+      return undefined;
     }
   } catch (error) {
     logger.error(

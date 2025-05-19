@@ -1,59 +1,42 @@
+import { logger } from '@/config/logger';
+import { tool, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
-/**
- * Interface for all tools that can be used by the LLM agent
- */
-export interface Tool<PARAMS extends z.ZodType = z.ZodType, OUTPUT = unknown> {
-  /**
-   * Unique name for the tool
-   */
-  name: string;
-
-  /**
-   * Human-readable description of what the tool does
-   */
-  description: string;
-
-  /**
-   * Zod schema for the tool's parameters
-   */
-  schema: PARAMS;
-
-  /**
-   * Method to execute the tool with validated parameters
-   */
-  execute: (params: z.infer<PARAMS>) => Promise<OUTPUT>;
-
-  /**
-   * Generate a JSON Schema for tool parameters
-   */
-  getParameterJSONSchema: () => Record<string, unknown>;
-
-  /**
-   * Generate a readable string for tool parameters
-   */
-  getReadableParams: (params: z.infer<PARAMS>) => string;
-}
-
-/**
- * Default tool type with unknown return type
- */
-export type DefaultTool = Tool<z.ZodType, unknown>;
+export type ToolParameters = z.ZodTypeAny | z.Schema<any>;
 
 /**
  * Factory function to create a tool with correct typing
  */
-export function createTool<PARAMS extends z.ZodType, OUTPUT>(config: {
+export function wrapTool<PARAMS extends ToolParameters = any, OUTPUT = any>(config: {
   name: string;
   description: string;
   schema: PARAMS;
-  execute: (params: z.infer<PARAMS>) => Promise<OUTPUT>;
+  execute: (args: z.infer<PARAMS>, options?: ToolExecutionOptions) => Promise<OUTPUT>;
   getReadableParams?: (params: z.infer<PARAMS>) => string;
-}): Tool<PARAMS, OUTPUT> {
+  getReadableResult?: (result: OUTPUT) => string;
+}) {
   return {
-    ...config,
+    name: config.name,
+    callback: config.execute,
+    tool: tool({
+      description: config.description,
+      parameters: config.schema,
+      execute: async (...args) => {
+        const [params] = args;
+        const result = await config.execute(...args);
+        logger.info(
+          `${config.name}(${
+            config.getReadableParams?.(params) || JSON.stringify(params, null, 2)
+          }) => ${config.getReadableResult?.(result) || JSON.stringify(result, null, 2)}`,
+        );
+        return result;
+      },
+    }),
     getReadableParams: config.getReadableParams || (params => JSON.stringify(params)),
-    getParameterJSONSchema: () => zodToJsonSchema(config.schema),
+    getReadableResult: config.getReadableResult || (result => result),
   };
 }
+
+export type WrappedTool<PARAMS extends ToolParameters = any, OUTPUT = any> = ReturnType<
+  typeof wrapTool<PARAMS, OUTPUT>
+>;

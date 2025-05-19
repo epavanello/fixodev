@@ -19,7 +19,7 @@ describe('File Tools', () => {
 
   describe('readFile', () => {
     it('should read a file successfully', async () => {
-      const result = await readFileTool.execute({
+      const result = await readFileTool.callback({
         path: 'test-samples/sample.txt',
       });
 
@@ -30,7 +30,7 @@ describe('File Tools', () => {
     });
 
     it('should read specific lines from a file', async () => {
-      const result = await readFileTool.execute({
+      const result = await readFileTool.callback({
         path: 'test-samples/sample.txt',
         startLine: 3,
         endLine: 5,
@@ -44,7 +44,7 @@ describe('File Tools', () => {
     });
 
     it('should read a file from a subdirectory', async () => {
-      const result = await readFileTool.execute({
+      const result = await readFileTool.callback({
         path: 'test-samples/subdir/nested.txt',
       });
 
@@ -57,7 +57,7 @@ describe('File Tools', () => {
   describe('writeFile', () => {
     it('should write to a file successfully', async () => {
       const testContent = '// Test content\n// For testing purposes';
-      const result = await writeFileTool.execute({
+      const result = await writeFileTool.callback({
         path: 'test-samples/write-test.txt',
         content: testContent,
         createDirectories: true,
@@ -68,7 +68,7 @@ describe('File Tools', () => {
       expect(result.path).toBe('test-samples/write-test.txt');
 
       // Verify the content was written correctly
-      const readResult = await readFileTool.execute({
+      const readResult = await readFileTool.callback({
         path: 'test-samples/write-test.txt',
       });
       expect(readResult.content).toBe(testContent);
@@ -77,7 +77,7 @@ describe('File Tools', () => {
 
   describe('fileExists', () => {
     it('should check if a file exists', async () => {
-      const result = await fileExistsTool.execute({
+      const result = await fileExistsTool.callback({
         path: 'test-samples/sample.txt',
       });
 
@@ -88,7 +88,7 @@ describe('File Tools', () => {
     });
 
     it('should return false for non-existent files', async () => {
-      const result = await fileExistsTool.execute({
+      const result = await fileExistsTool.callback({
         path: 'test-samples/non-existent-file.txt',
       });
 
@@ -99,7 +99,7 @@ describe('File Tools', () => {
     });
 
     it('should detect directories', async () => {
-      const result = await fileExistsTool.execute({
+      const result = await fileExistsTool.callback({
         path: 'test-samples/subdir',
       });
 
@@ -112,7 +112,7 @@ describe('File Tools', () => {
 
   describe('listDirectory', () => {
     it('should list directory contents', async () => {
-      const result = await listDirectoryTool.execute({
+      const result = await listDirectoryTool.callback({
         path: 'test-samples',
       });
 
@@ -127,7 +127,7 @@ describe('File Tools', () => {
     });
 
     it('should list nested directory contents', async () => {
-      const result = await listDirectoryTool.execute({
+      const result = await listDirectoryTool.callback({
         path: 'test-samples/subdir',
       });
 
@@ -143,7 +143,7 @@ describe('Search Tools', () => {
 
   describe('grepCode', () => {
     it('should search for text in files', async () => {
-      const result = await grepTool.execute({
+      const result = await grepTool.callback({
         pattern: 'test',
         paths: ['test-samples'],
         extensions: ['.txt', '.ts'],
@@ -160,7 +160,7 @@ describe('Search Tools', () => {
     });
 
     it('should search with case sensitivity', async () => {
-      const result = await grepTool.execute({
+      const result = await grepTool.callback({
         pattern: 'Test',
         paths: ['test-samples'],
         extensions: ['.ts'],
@@ -177,7 +177,7 @@ describe('Search Tools', () => {
 
   describe('findFiles', () => {
     it('should find files by pattern', async () => {
-      const result = await findFilesTool.execute({
+      const result = await findFilesTool.callback({
         pattern: 'sample',
         directory: 'test-samples',
         extensions: ['.txt'],
@@ -191,7 +191,7 @@ describe('Search Tools', () => {
     });
 
     it('should find files in subdirectories', async () => {
-      const result = await findFilesTool.execute({
+      const result = await findFilesTool.callback({
         pattern: 'nested',
         directory: 'test-samples',
         extensions: ['.txt'],

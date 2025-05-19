@@ -12,6 +12,7 @@ import { JobError } from '../utils/error';
 import { envConfig } from '../config/env';
 import { ensureForkExists, ForkResult } from '../git/fork';
 import { processCodeModificationRequest } from '@/llm/processor';
+import { createTaskCompletionTool } from '@/llm/tools';
 
 const handlerLogger = rootLogger.child({ context: 'MentionOnIssueJobHandler' });
 
@@ -102,12 +103,14 @@ export async function handleMentionOnIssueJob(job: ManagedJob): Promise<void> {
     await createBranch(git, branchName);
     logger.info({ branchName }, 'Created new branch.');
 
-    const filesWereChangedByCommand = await processCodeModificationRequest(
+    const modificationResult = await processCodeModificationRequest(
       commandToProcess,
       repoPath,
       botConfig,
+      true,
+      createTaskCompletionTool(),
     );
-    logger.info({ filesWereChangedByCommand }, 'Result of applying command changes.');
+    logger.info({ modificationResult }, 'Result of applying command changes.');
 
     const status = await git.status();
     const hasPendingChanges = status.files.length > 0;
@@ -117,7 +120,7 @@ export async function handleMentionOnIssueJob(job: ManagedJob): Promise<void> {
     );
 
     let prUrl: string | undefined;
-    if (hasPendingChanges) {
+    if (hasPendingChanges && modificationResult?.objectiveAchieved) {
       logger.info('Committing and pushing changes.');
       const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber} by @${envConfig.BOT_NAME}`;
 

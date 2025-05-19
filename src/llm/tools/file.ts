@@ -1,7 +1,7 @@
 import * as z from 'zod';
 import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
-import { createTool } from './types';
+import { wrapTool } from './types';
 
 /**
  * Create a tool for reading file contents
@@ -27,7 +27,7 @@ export const createReadFileTool = (basePath: string) => {
     endLine: z.number().optional().describe('Line number to end reading at (1-indexed, inclusive)'),
   });
 
-  return createTool({
+  return wrapTool({
     name: 'readFile',
     description: 'Read the contents of a file',
     schema,
@@ -60,6 +60,9 @@ export const createReadFileTool = (basePath: string) => {
         throw error;
       }
     },
+    getReadableResult: result => {
+      return result.content.slice(0, 50) + '...';
+    },
   });
 };
 
@@ -87,7 +90,7 @@ export const createWriteFileTool = (basePath: string) => {
       .describe("Whether to create parent directories if they don't exist"),
   });
 
-  return createTool({
+  return wrapTool({
     name: 'writeFile',
     description: 'Write content to a file',
     schema,
@@ -109,8 +112,15 @@ export const createWriteFileTool = (basePath: string) => {
         throw new Error(`Failed to write file: ${(error as Error).message}`);
       }
     },
-    getReadableParams: ({ content: _, ...params }) => {
-      return JSON.stringify(params);
+    getReadableParams: ({ content, ...params }) => {
+      return JSON.stringify(
+        {
+          ...params,
+          content: content.slice(0, 50) + '...',
+        },
+        null,
+        2,
+      );
     },
   });
 };
@@ -126,7 +136,7 @@ export const createFileExistsTool = (basePath: string) => {
     path: z.string().describe('Path to the file, relative to the repository root'),
   });
 
-  return createTool({
+  return wrapTool({
     name: 'fileExists',
     description: 'Check if a file exists',
     schema,
@@ -164,7 +174,7 @@ export const createListDirectoryTool = (basePath: string) => {
     path: z.string().describe('Path to the directory, relative to the repository root'),
   });
 
-  return createTool({
+  return wrapTool({
     name: 'listDirectory',
     description: 'List the contents of a directory',
     schema,

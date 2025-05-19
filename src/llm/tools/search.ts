@@ -2,7 +2,7 @@ import * as z from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import fastGlob from 'fast-glob';
-import { createTool } from './types';
+import { wrapTool } from './types';
 
 const ignoreDirs = ['.git', 'node_modules', 'dist', 'build', 'coverage'];
 
@@ -49,7 +49,7 @@ export const createGrepTool = (basePath: string) => {
       .describe('Whether to use case-sensitive matching'),
   });
 
-  return createTool({
+  return wrapTool({
     name: 'grepCode',
     description: 'Search code with regular expressions',
     schema,
@@ -200,7 +200,7 @@ export const createFindFilesTool = (basePath: string) => {
     maxResults: z.number().optional().default(20).describe('Maximum number of results to return'),
   });
 
-  return createTool({
+  return wrapTool({
     name: 'findFiles',
     description:
       'Find files by name pattern. Supports glob patterns, regex, or simple text matching.',

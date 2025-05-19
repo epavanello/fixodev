@@ -1,83 +1,12 @@
-import * as z from 'zod';
 import { MemoryStore, MemoryEntry } from './memory';
 import { ToolRegistry } from '../tools/registry';
-import { ChatCompletionRole } from 'openai/resources/chat/completions/completions';
-
-/**
- * Message roles in a conversation
- */
-export enum MessageRole {
-  SYSTEM = 'system',
-  USER = 'user',
-  ASSISTANT = 'assistant',
-  FUNCTION = 'function',
-  TOOL = 'tool', // For local use, will be mapped to 'function' when sending to OpenAI
-}
-
-/**
- * Definition of a message in the conversation
- */
-export const MessageSchema = z.object({
-  /**
-   * Unique identifier for the message
-   */
-  id: z.string(),
-
-  /**
-   * Role of the message sender
-   */
-  role: z.nativeEnum(MessageRole),
-
-  /**
-   * Content of the message
-   */
-  content: z.string(),
-
-  /**
-   * Timestamp when the message was created
-   */
-  createdAt: z.number().default(() => Date.now()),
-
-  /**
-   * Name of the tool if this is a tool message
-   */
-  toolName: z.string().optional(),
-
-  /**
-   * Tool call ID if this is a response to a tool call
-   */
-  toolCallId: z.string().optional(),
-});
-
-export type Message = z.infer<typeof MessageSchema>;
-
-/**
- * Tool call definition
- */
-export const ToolCallSchema = z.object({
-  /**
-   * Unique identifier for the tool call
-   */
-  id: z.string(),
-
-  /**
-   * Name of the tool to call
-   */
-  name: z.string(),
-
-  /**
-   * Arguments to pass to the tool
-   */
-  arguments: z.record(z.string(), z.unknown()),
-});
-
-export type ToolCall = z.infer<typeof ToolCallSchema>;
+import { CoreAssistantMessage, CoreMessage, CoreToolMessage, ToolResultUnion, ToolSet } from 'ai';
 
 /**
  * The context for an agent, including conversation history and memory
  */
 export class AgentContext {
-  private messages: Message[] = [];
+  private messages: CoreMessage[] = [];
   private memory: MemoryStore;
   private toolRegistry: ToolRegistry;
   private maxHistoryTokens: number;
@@ -89,7 +18,7 @@ export class AgentContext {
     maxHistoryTokens?: number;
     reservedTokens?: number;
     systemMessage?: string;
-    history?: Message[];
+    history?: CoreMessage[];
   }) {
     this.toolRegistry = options.toolRegistry;
     this.memory = options.memory || new MemoryStore();
@@ -99,54 +28,45 @@ export class AgentContext {
     // Add system message if provided
     if (options.systemMessage) {
       this.addMessage({
-        role: MessageRole.SYSTEM,
+        role: 'system',
         content: options.systemMessage,
       });
     }
 
     // Add history if provided
     if (options.history) {
-      this.messages.push(...options.history.filter(msg => msg.role !== MessageRole.SYSTEM));
+      this.messages.push(...options.history.filter(msg => msg.role !== 'system'));
     }
   }
 
   /**
    * Add a message to the conversation
    */
-  addMessage(
-    message: Omit<Message, 'id' | 'createdAt'> & { id?: string; createdAt?: number },
-  ): Message {
-    const id = message.id || this.generateId('msg');
-    const newMessage = MessageSchema.parse({
-      ...message,
-      id,
-      createdAt: message.createdAt || Date.now(),
-    });
-
-    this.messages.push(newMessage);
-    return newMessage;
+  addMessage(message: CoreMessage): CoreMessage {
+    this.messages.push(message);
+    return message;
   }
 
   /**
    * Get all messages in the conversation
    */
-  getMessages(): Message[] {
+  getMessages(): CoreMessage[] {
     return [...this.messages];
   }
 
   /**
    * Get the last N messages
    */
-  getLastMessages(count: number): Message[] {
+  getLastMessages(count: number): CoreMessage[] {
     return this.messages.slice(-count);
   }
 
   /**
    * Add a user message
    */
-  addUserMessage(content: string): Message {
+  addUserMessage(content: string): CoreMessage {
     return this.addMessage({
-      role: MessageRole.USER,
+      role: 'user',
       content,
     });
   }
@@ -154,58 +74,38 @@ export class AgentContext {
   /**
    * Add an assistant message
    */
-  addAssistantMessage(content: string): Message {
+  addAssistantMessage(content: string): CoreMessage {
     return this.addMessage({
-      role: MessageRole.ASSISTANT,
+      role: 'assistant',
       content,
     });
   }
 
   /**
-   * Add an assistant message with tool calls
+   * Add a tool request message
    */
-  addAssistantToolCallMessage(content: string, toolCalls: ToolCall[]): Message {
-    // For now we'll just add it as a regular assistant message with the tool calls described in content
-    // In the future this could be enhanced to store the actual tool call data in the message
-    const toolCallsDescription = toolCalls
-      .map(tc => `Tool Call: ${tc.name}(${JSON.stringify(tc.arguments)})`)
-      .join('\n');
-
-    const fullContent = content ? `${content}\n\n${toolCallsDescription}` : toolCallsDescription;
-
-    return this.addMessage({
-      role: MessageRole.ASSISTANT,
-      content: fullContent,
+  addToolResultMessage(toolResult: ToolResultUnion<any>) {
+    this.addMessage({
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool-call',
+          toolCallId: toolResult.toolCallId,
+          toolName: toolResult.toolName,
+          args: toolResult.args,
+        },
+      ],
     });
-  }
-
-  /**
-   * Add a tool result message
-   */
-  addToolResultMessage(toolCallId: string, toolName: string, content: string): Message {
-    return this.addMessage({
-      role: MessageRole.FUNCTION,
-      toolName,
-      toolCallId,
-      content: typeof content === 'string' ? content : JSON.stringify(content),
-    });
-  }
-
-  /**
-   * Record a tool call in memory
-   */
-  recordToolCall(toolCall: ToolCall, result: unknown): string {
-    return this.memory.add({
-      type: 'tool_call',
-      content: {
-        toolCall,
-        result,
-      },
-      metadata: {
-        toolName: toolCall.name,
-        timestamp: Date.now(),
-      },
-      importance: 0.5, // Default importance
+    this.addMessage({
+      role: 'tool',
+      content: [
+        {
+          type: 'tool-result',
+          result: toolResult.result,
+          toolCallId: toolResult.toolCallId,
+          toolName: toolResult.toolName,
+        },
+      ],
     });
   }
 
@@ -251,34 +151,9 @@ export class AgentContext {
    * Generate a message-like object for prompt construction,
    * filtering to respect token limits
    */
-  getPromptMessages(): {
-    role: ChatCompletionRole;
-    content: string;
-    name?: string;
-    tool_call_id?: string;
-  }[] {
+  getPromptMessages(): CoreMessage[] {
     // This is a simplified version; in a real implementation,
     // you would need to count tokens and truncate history
-    return this.messages.map(msg => {
-      // Map internal MessageRole to OpenAI's ChatCompletionRole
-      const role =
-        msg.role === MessageRole.TOOL
-          ? ('function' as ChatCompletionRole)
-          : (msg.role as ChatCompletionRole);
-
-      return {
-        role,
-        content: msg.content,
-        ...(msg.toolName ? { name: msg.toolName } : {}),
-        ...(msg.toolCallId ? { tool_call_id: msg.toolCallId } : {}),
-      };
-    });
-  }
-
-  /**
-   * Generate a unique ID
-   */
-  private generateId(prefix: string): string {
-    return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    return this.messages;
   }
 }
