@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import readline from 'readline/promises';
 import { processCodeModificationRequest } from './llm/processor';
 import { loadBotConfig } from './utils/yaml';
-import { createTaskCompletionTool } from './llm/tools';
+import { taskCompletionTool } from './llm/tools';
 
 async function main() {
   const program = new Command();
@@ -34,7 +34,7 @@ async function main() {
           path.resolve(process.cwd()),
           await loadBotConfig(path.resolve(process.cwd())),
           true,
-          createTaskCompletionTool(),
+          taskCompletionTool,
         );
 
         if (!result?.objectiveAchieved) {

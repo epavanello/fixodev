@@ -1,26 +1,41 @@
 import {
-  createFileExistsTool,
-  createListDirectoryTool,
-  createReadFileTool,
-  createWriteFileTool,
+  fileExistsTool,
+  listDirectoryTool,
+  readFileTool,
+  writeFileTool,
+  showFileTreeTool,
 } from './file';
-import { createFindFilesTool, createGrepTool } from './search';
+import { findFilesTool, grepCodeTool } from './search';
 import { askUserTool } from './interactive';
-import {
-  createRepositoryAnalysisTool,
-  createTaskCompletionTool,
-  createUpdatedSourceCodeTool,
-} from './registry';
+import { taskCompletionTool } from './task';
+
+const writableTools = [writeFileTool];
+const readonlyTools = [fileExistsTool, listDirectoryTool, readFileTool, showFileTreeTool];
+const searchTools = [findFilesTool, grepCodeTool];
+const interactiveTools = [askUserTool];
+const taskTools = [taskCompletionTool];
+const allTools = [
+  ...readonlyTools,
+  ...writableTools,
+  ...searchTools,
+  ...interactiveTools,
+  ...taskTools,
+];
 
 export {
-  createFileExistsTool,
-  createListDirectoryTool,
-  createReadFileTool,
-  createWriteFileTool,
-  createFindFilesTool,
-  createGrepTool,
+  fileExistsTool,
+  listDirectoryTool,
+  readFileTool,
+  writeFileTool,
+  showFileTreeTool,
+  findFilesTool,
+  grepCodeTool,
   askUserTool,
-  createRepositoryAnalysisTool,
-  createTaskCompletionTool,
-  createUpdatedSourceCodeTool,
+  taskCompletionTool,
+  writableTools,
+  readonlyTools,
+  searchTools,
+  interactiveTools,
+  taskTools,
+  allTools,
 };

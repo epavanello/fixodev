@@ -1,8 +1,12 @@
 import { logger } from '@/config/logger';
-import { tool, ToolExecutionOptions } from 'ai';
+import { ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 
 export type ToolParameters = z.ZodTypeAny | z.Schema<any>;
+
+export type ToolContext = {
+  basePath: string;
+};
 
 /**
  * Factory function to create a tool with correct typing
@@ -11,27 +15,31 @@ export function wrapTool<PARAMS extends ToolParameters = any, OUTPUT = any>(conf
   name: string;
   description: string;
   schema: PARAMS;
-  execute: (args: z.infer<PARAMS>, options?: ToolExecutionOptions) => Promise<OUTPUT>;
+  execute: (
+    params: z.infer<PARAMS>,
+    options?: ToolExecutionOptions,
+    context?: ToolContext,
+  ) => Promise<OUTPUT>;
   getReadableParams?: (params: z.infer<PARAMS>) => string;
   getReadableResult?: (result: OUTPUT) => string;
 }) {
   return {
     name: config.name,
-    callback: config.execute,
-    tool: tool({
-      description: config.description,
-      parameters: config.schema,
-      execute: async (...args) => {
-        const [params] = args;
-        const result = await config.execute(...args);
-        logger.info(
-          `${config.name}(${
-            config.getReadableParams?.(params) || JSON.stringify(params, null, 2)
-          }) => ${config.getReadableResult?.(result) || JSON.stringify(result, null, 2)}`,
-        );
-        return result;
-      },
-    }),
+    execute: async (
+      params: z.infer<PARAMS>,
+      options?: ToolExecutionOptions,
+      context?: ToolContext,
+    ) => {
+      const result = await config.execute(params, options, context);
+      logger.info(
+        `${config.name}(${
+          config.getReadableParams?.(params) || JSON.stringify(params, null, 2)
+        }) => ${config.getReadableResult?.(result) || JSON.stringify(result, null, 2)}`,
+      );
+      return result;
+    },
+    description: config.description,
+    parameters: config.schema,
     getReadableParams: config.getReadableParams || (params => JSON.stringify(params)),
     getReadableResult: config.getReadableResult || (result => result),
   };

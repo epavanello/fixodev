@@ -12,7 +12,7 @@ import { JobError } from '../utils/error';
 import { envConfig } from '../config/env';
 import { ensureForkExists, ForkResult } from '../git/fork';
 import { processCodeModificationRequest } from '@/llm/processor';
-import { createTaskCompletionTool } from '@/llm/tools';
+import { taskCompletionTool } from '@/llm/tools';
 
 const handlerLogger = rootLogger.child({ context: 'MentionOnIssueJobHandler' });
 
@@ -108,7 +108,7 @@ export async function handleMentionOnIssueJob(job: ManagedJob): Promise<void> {
       repoPath,
       botConfig,
       true,
-      createTaskCompletionTool(),
+      taskCompletionTool,
     );
     logger.info({ modificationResult }, 'Result of applying command changes.');
 

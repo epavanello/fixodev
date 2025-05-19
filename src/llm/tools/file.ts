@@ -4,10 +4,12 @@ import { join, dirname } from 'path';
 import { wrapTool } from './types';
 
 /**
- * Create a tool for reading file contents
+ * A tool for reading file contents
  */
-export const createReadFileTool = (basePath: string) => {
-  const schema = z.object({
+export const readFileTool = wrapTool({
+  name: 'readFile',
+  description: 'Read the contents of a file',
+  schema: z.object({
     /**
      * Path to the file, relative to the base path
      */
@@ -25,52 +27,52 @@ export const createReadFileTool = (basePath: string) => {
      * Line number to end reading at (1-indexed, inclusive)
      */
     endLine: z.number().optional().describe('Line number to end reading at (1-indexed, inclusive)'),
-  });
+  }),
+  execute: async (params, _, context) => {
+    if (!context) {
+      throw new Error('Context is required');
+    }
 
-  return wrapTool({
-    name: 'readFile',
-    description: 'Read the contents of a file',
-    schema,
-    execute: async params => {
-      try {
-        const filePath = join(basePath, params.path);
-        const content = await fs.readFile(filePath, 'utf-8');
+    try {
+      const filePath = join(context.basePath, params.path);
+      const content = await fs.readFile(filePath, 'utf-8');
 
-        if (params.startLine || params.endLine) {
-          const lines = content.split('\n');
-          const start = params.startLine ? Math.max(0, params.startLine - 1) : 0;
-          const end = params.endLine ? Math.min(lines.length, params.endLine) : lines.length;
-
-          return {
-            content: lines.slice(start, end).join('\n'),
-            startLine: start + 1,
-            endLine: end,
-            totalLines: lines.length,
-          };
-        }
+      if (params.startLine || params.endLine) {
+        const lines = content.split('\n');
+        const start = params.startLine ? Math.max(0, params.startLine - 1) : 0;
+        const end = params.endLine ? Math.min(lines.length, params.endLine) : lines.length;
 
         return {
-          content,
-          totalLines: content.split('\n').length,
+          content: lines.slice(start, end).join('\n'),
+          startLine: start + 1,
+          endLine: end,
+          totalLines: lines.length,
         };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          throw new Error(`File not found: ${params.path}`);
-        }
-        throw error;
       }
-    },
-    getReadableResult: result => {
-      return result.content.slice(0, 50) + '...';
-    },
-  });
-};
+
+      return {
+        content,
+        totalLines: content.split('\n').length,
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`File not found: ${params.path}`);
+      }
+      throw error;
+    }
+  },
+  getReadableResult: result => {
+    return result.content.slice(0, 50) + '...';
+  },
+});
 
 /**
- * Create a tool for writing to a file
+ * A tool for writing to a file
  */
-export const createWriteFileTool = (basePath: string) => {
-  const schema = z.object({
+export const writeFileTool = wrapTool({
+  name: 'writeFile',
+  description: 'Write content to a file',
+  schema: z.object({
     /**
      * Path to the file, relative to the base path
      */
@@ -88,155 +90,154 @@ export const createWriteFileTool = (basePath: string) => {
       .boolean()
       .default(true)
       .describe("Whether to create parent directories if they don't exist"),
-  });
+  }),
+  execute: async (params, _, context) => {
+    if (!context) {
+      throw new Error('Context is required');
+    }
 
-  return wrapTool({
-    name: 'writeFile',
-    description: 'Write content to a file',
-    schema,
-    execute: async params => {
-      try {
-        const filePath = join(basePath, params.path);
+    try {
+      const filePath = join(context.basePath, params.path);
 
-        if (params.createDirectories) {
-          await fs.mkdir(dirname(filePath), { recursive: true });
-        }
-
-        await fs.writeFile(filePath, params.content, 'utf-8');
-
-        return {
-          success: true,
-          path: params.path,
-        };
-      } catch (error) {
-        throw new Error(`Failed to write file: ${(error as Error).message}`);
+      if (params.createDirectories) {
+        await fs.mkdir(dirname(filePath), { recursive: true });
       }
-    },
-    getReadableParams: ({ content, ...params }) => {
-      return JSON.stringify(
-        {
-          ...params,
-          content: content.slice(0, 50) + '...',
-        },
-        null,
-        2,
-      );
-    },
-  });
-};
+
+      await fs.writeFile(filePath, params.content, 'utf-8');
+
+      return {
+        success: true,
+        path: params.path,
+      };
+    } catch (error) {
+      throw new Error(`Failed to write file: ${(error as Error).message}`);
+    }
+  },
+  getReadableParams: ({ content, ...params }) => {
+    return JSON.stringify(
+      {
+        ...params,
+        content: content.slice(0, 50) + '...',
+      },
+      null,
+      2,
+    );
+  },
+});
 
 /**
- * Create a tool for checking if a file exists
+ * A tool for checking if a file exists
  */
-export const createFileExistsTool = (basePath: string) => {
-  const schema = z.object({
+export const fileExistsTool = wrapTool({
+  name: 'fileExists',
+  description: 'Check if a file exists',
+  schema: z.object({
     /**
      * Path to the file, relative to the base path
      */
     path: z.string().describe('Path to the file, relative to the repository root'),
-  });
+  }),
+  execute: async (params, _, context) => {
+    if (!context) {
+      throw new Error('Context is required');
+    }
 
-  return wrapTool({
-    name: 'fileExists',
-    description: 'Check if a file exists',
-    schema,
-    execute: async params => {
-      try {
-        const filePath = join(basePath, params.path);
-        await fs.access(filePath);
+    try {
+      const filePath = join(context.basePath, params.path);
+      await fs.access(filePath);
 
-        const stats = await fs.stat(filePath);
+      const stats = await fs.stat(filePath);
 
-        return {
-          exists: true,
-          isDirectory: stats.isDirectory(),
-          isFile: stats.isFile(),
-        };
-      } catch (error) {
-        return {
-          exists: false,
-          isDirectory: false,
-          isFile: false,
-        };
-      }
-    },
-  });
-};
+      return {
+        exists: true,
+        isDirectory: stats.isDirectory(),
+        isFile: stats.isFile(),
+      };
+    } catch (error) {
+      return {
+        exists: false,
+        isDirectory: false,
+        isFile: false,
+      };
+    }
+  },
+});
 
 /**
- * Create a tool for listing directory contents
+ * A tool for listing directory contents
  */
-export const createListDirectoryTool = (basePath: string) => {
-  const schema = z.object({
+export const listDirectoryTool = wrapTool({
+  name: 'listDirectory',
+  description: 'List the contents of a directory',
+  schema: z.object({
     /**
      * Path to the directory, relative to the base path
      */
     path: z.string().describe('Path to the directory, relative to the repository root'),
-  });
+  }),
+  execute: async (params, _, context) => {
+    if (!context) {
+      throw new Error('Context is required');
+    }
 
-  return wrapTool({
-    name: 'listDirectory',
-    description: 'List the contents of a directory',
-    schema,
-    execute: async params => {
-      try {
-        const dirPath = join(basePath, params.path);
-        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    try {
+      const dirPath = join(context.basePath, params.path);
 
-        const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
-        const directories = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
+      const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
 
-        return {
-          path: params.path,
-          files,
-          directories,
-        };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          throw new Error(`Directory not found: ${params.path}`);
-        }
-        throw error;
+      const directories = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
+
+      return {
+        path: params.path,
+        files,
+        directories,
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`Directory not found: ${params.path}`);
       }
-    },
-  });
-};
+      throw error;
+    }
+  },
+});
 
 /**
- * Create a tool for showing the file tree
+ * A tool for showing the file tree
  */
-export const createShowFileTreeTool = (basePath: string) => {
-  const schema = z.object({
+export const showFileTreeTool = wrapTool({
+  name: 'showFileTree',
+  description: 'Show the file tree of a directory',
+  schema: z.object({
     /**
      * Path to the directory, relative to the base path
      */
     path: z.string().describe('Path to the directory, relative to the repository root'),
-  });
+  }),
+  execute: async (params, _, context) => {
+    if (!context) {
+      throw new Error('Context is required');
+    }
 
-  return wrapTool({
-    name: 'showFileTree',
-    description: 'Show the file tree of a directory',
-    schema,
-    execute: async params => {
-      try {
-        const dirPath = join(basePath, params.path);
-        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    try {
+      const dirPath = join(context.basePath, params.path);
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
 
-        const tree = entries.map(entry => ({
-          name: entry.name,
-          isDirectory: entry.isDirectory(),
-        }));
+      const tree = entries.map(entry => ({
+        name: entry.name,
+        isDirectory: entry.isDirectory(),
+      }));
 
-        return {
-          path: params.path,
-          tree,
-        };
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          throw new Error(`Directory not found: ${params.path}`);
-        }
-        throw error;
+      return {
+        path: params.path,
+        tree,
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`Directory not found: ${params.path}`);
       }
-    },
-  });
-};
+      throw error;
+    }
+  },
+});

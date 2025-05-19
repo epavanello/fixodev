@@ -1,18 +1,12 @@
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { RepoAgent, AgentOptions } from './agent';
-import {
-  createReadFileTool,
-  createWriteFileTool,
-  createListDirectoryTool,
-  createFileExistsTool,
-} from './tools/file';
-import { createGrepTool, createFindFilesTool } from './tools/search';
 import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
 import { CoreMessage, LanguageModelV1 } from 'ai';
 import { coderModel } from './client';
 import { ToolParameters, WrappedTool } from './tools/types';
+import { readonlyTools, searchTools, writableTools } from './tools';
 
 export interface CodeContext {
   filePath?: string;
@@ -61,16 +55,7 @@ export const createSourceModifierAgent = (
     ...agentOptionOverrides,
   });
 
-  // Register file system tools (including write)
-  const effectiveRepoPath = repositoryPath || '.';
-  agent.registerTool(createReadFileTool(effectiveRepoPath));
-  agent.registerTool(createWriteFileTool(effectiveRepoPath));
-  agent.registerTool(createListDirectoryTool(effectiveRepoPath));
-  agent.registerTool(createFileExistsTool(effectiveRepoPath));
-
-  // Register search tools
-  agent.registerTool(createGrepTool(effectiveRepoPath));
-  agent.registerTool(createFindFilesTool(effectiveRepoPath));
+  [...readonlyTools, ...writableTools, ...searchTools].forEach(tool => agent.registerTool(tool));
 
   return agent;
 };

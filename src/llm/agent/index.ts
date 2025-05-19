@@ -85,7 +85,9 @@ export class RepoAgent {
     this.maxIterations = options.maxIterations || 5;
     this.conversationalLogging = options.conversationalLogging || false;
 
-    const toolRegistry = new ToolRegistry();
+    const toolRegistry = new ToolRegistry({
+      basePath: this.basePath,
+    });
     const memory = new MemoryStore();
     let systemMessage = options.systemMessage || 'You are a helpful AI assistant.';
 
