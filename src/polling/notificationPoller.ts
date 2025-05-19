@@ -114,7 +114,7 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           'Failed to process individual notification or fetch subject details.',
         );
         // Optionally mark as read to prevent retrying a persistently failing notification
-        // await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
+        await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
       }
     }
     lastSuccessfulPollTimestamp = new Date().toISOString();
