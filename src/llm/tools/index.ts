@@ -8,13 +8,19 @@ import {
 import { findFilesTool, grepCodeTool } from './search';
 import { askUserTool } from './interactive';
 import { taskCompletionTool } from './task';
+import { WrappedTool } from './types';
 
-const writableTools = [writeFileTool];
-const readonlyTools = [fileExistsTool, listDirectoryTool, readFileTool, showFileTreeTool];
-const searchTools = [findFilesTool, grepCodeTool];
-const interactiveTools = [askUserTool];
-const taskTools = [taskCompletionTool];
-const allTools = [
+const writableTools: WrappedTool[] = [writeFileTool];
+const readonlyTools: WrappedTool[] = [
+  fileExistsTool,
+  listDirectoryTool,
+  readFileTool,
+  showFileTreeTool,
+];
+const searchTools: WrappedTool[] = [findFilesTool, grepCodeTool];
+const interactiveTools: WrappedTool[] = [askUserTool];
+const taskTools: WrappedTool[] = [taskCompletionTool];
+const allTools: WrappedTool[] = [
   ...readonlyTools,
   ...writableTools,
   ...searchTools,

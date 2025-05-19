@@ -1,6 +1,6 @@
 import * as z from 'zod';
 import { ToolContext, WrappedTool } from './types';
-import { ToolExecutionOptions, ToolSet } from 'ai';
+import { ToolSet } from 'ai';
 
 /**
  * Registry for managing tools available to the LLM agent
