@@ -34,7 +34,12 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
     }
 
     for (const notification of notifications) {
-      if (notification.reason !== 'mention' || !notification.subject || !notification.repository) {
+      if (
+        notification.reason !== 'mention' ||
+        !notification.subject ||
+        !notification.repository ||
+        notification.repository.private
+      ) {
         // Mark as read if not relevant to free up notification space, or handle as needed
         // For now, only processing mentions explicitly
         // If we decide to mark as read, ensure notification.id is correctly parsed:
