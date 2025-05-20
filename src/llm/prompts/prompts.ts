@@ -4,30 +4,62 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { render } from './prompt-utils';
+import * as Handlebars from 'handlebars'; // Ensure consistent import
 
-// It is expected that this generated file (prompts.ts) is in the same directory 
-// as the .md template files it references and prompt-utils.ts.
+// It is expected that this generated file (prompts.ts) is in the same directory
+// as the .md (or .hbs) template files it references.
 // If not, __dirname logic might need adjustment or paths made absolute from project root.
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename); 
+const __dirname = path.dirname(__filename);
 
 // --- Argument Types ---
 export type SystemArgs = {
   readonly repositoryContext: string;
 };
 
+export type TestArgs = {
+  readonly features: Array<{
+    readonly details?: {
+      readonly description: string;
+      readonly version: string;
+    };
+    readonly id: string;
+    readonly isEnabled: boolean;
+    readonly name: string;
+    readonly subTasks: Array<{
+      readonly completed: boolean;
+      readonly name: string;
+    }>;
+  }>;
+  readonly hasContributors: boolean;
+  readonly projectName: string;
+  readonly projectOwner: {
+    readonly email: string;
+    readonly name: string;
+  };
+  readonly projectStatus: string;
+};
 
 // --- Prompt Generation Functions ---
 
 /**
- * Generates the 'system.md' prompt.
+ * Generates the 'system.md' prompt using Handlebars.
  * Template path: system.md
  */
-export async function generateSystemPrompt(
-  args: SystemArgs
-): Promise<string> {
+export async function generateSystemPrompt(args: SystemArgs): Promise<string> {
   const templatePath = path.resolve(__dirname, 'system.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
-  return render(templateContent, args as Record<string, string>);
+  const compiledTemplate = Handlebars.compile(templateContent);
+  return compiledTemplate(args);
+}
+
+/**
+ * Generates the 'test.md' prompt using Handlebars.
+ * Template path: test.md
+ */
+export async function generateTestPrompt(args: TestArgs): Promise<string> {
+  const templatePath = path.resolve(__dirname, 'test.md');
+  const templateContent = await fs.readFile(templatePath, 'utf-8');
+  const compiledTemplate = Handlebars.compile(templateContent);
+  return compiledTemplate(args);
 }

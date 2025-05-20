@@ -6,7 +6,7 @@ import { CoreMessage, LanguageModelV1 } from 'ai';
 import { coderModel } from './client';
 import { ToolParameters, WrappedTool } from './tools/types';
 import { readonlyTools, searchTools, writableTools } from './tools';
-import { generateSystemPrompt } from './prompts/prompts';
+import { generateSystemPrompt, generateTestPrompt } from './prompts/prompts';
 
 export interface CodeContext {
   filePath?: string;
