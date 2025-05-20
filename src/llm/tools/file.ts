@@ -56,13 +56,21 @@ export const readFileTool = wrapTool({
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new Error(`File not found: ${params.path}`);
+        return {
+          error: `File not found: ${params.path}`,
+        };
       }
-      throw error;
+      return {
+        error: `Error reading file: ${(error as Error).message}`,
+      };
     }
   },
   getReadableResult: result => {
-    return result.content.slice(0, 50) + '...';
+    if ('error' in result && result.error) {
+      return `Error: ${result.error}`;
+    } else {
+      return result.content?.slice(0, 50) + '...';
+    }
   },
 });
 
