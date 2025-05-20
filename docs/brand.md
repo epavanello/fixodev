@@ -1,0 +1,29 @@
+brand
+
+repox.dev - €9.75/yr
+zenpr.dev - €9.75/yr
+pullbot.dev - €9.75/yr
+mergit.dev - €9.75/yr
+repozen.dev - €9.75/yr
+renrepo.dev - €9.75/yr
+headlessx.dev - €9.75/yr
+clonek.dev - €9.75/yr
+forkly.dev - €9.75/yr
+pullon.dev - €9.75/yr
+mergix.dev - €9.75/yr
+forko.dev - €9.75/yr
+reposister.dev - €9.75/yr
+commax.dev - €9.75/yr
+forkzen.dev - €9.75/yr
+mergify.dev - €9.75/yr
+renrepo.com - €10.02/yr
+repozen.ai - €79.90
+renrepo.ai - €79.90
+headlessx.ai - €79.90
+clonek.ai - €79.90
+forkly.ai - €79.90
+pullon.ai - €79.90
+mergix.ai - €79.90
+forko.ai - €79.90
+commax.ai - €79.90
+forkzen.ai - €79.90

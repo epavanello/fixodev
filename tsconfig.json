@@ -19,6 +19,6 @@
     },
     "types": ["bun-types"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scripts/**/*"], // Added scripts/
   "exclude": ["node_modules", "dist"]
 }

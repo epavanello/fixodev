@@ -1,12 +1,12 @@
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { RepoAgent, AgentOptions } from './agent';
-import { generateCodeAssistantSystemPrompt } from './prompts/system';
 import { BotConfig } from '../types/config';
 import { CoreMessage, LanguageModelV1 } from 'ai';
 import { coderModel } from './client';
 import { ToolParameters, WrappedTool } from './tools/types';
 import { readonlyTools, searchTools, writableTools } from './tools';
+import { generateSystemPrompt } from './prompts/prompts';
 
 export interface CodeContext {
   filePath?: string;
@@ -40,13 +40,13 @@ const getBaseAgentConfig = (
 /**
  * Create and configure an Agent for source modification (read and write operations)
  */
-export const createSourceModifierAgent = (
+export const createSourceModifierAgent = async (
   context: CodeContext,
   repositoryPath?: string,
   agentOptionOverrides?: Partial<AgentOptions>,
 ) => {
-  const defaultSystemMessage = generateCodeAssistantSystemPrompt({
-    languages: [context.language || context.botConfig?.runtime || 'unknown'],
+  const defaultSystemMessage = await generateSystemPrompt({
+    repositoryContext: repositoryPath ?? '',
   });
 
   const agent = new RepoAgent({
@@ -82,7 +82,7 @@ export const processCodeModificationRequest = async <PARAMS extends ToolParamete
       maxIterations: 50,
     };
 
-    const agent = createSourceModifierAgent(context, repositoryPath);
+    const agent = await createSourceModifierAgent(context, repositoryPath);
 
     const result = await agent.run(modificationRequest, {
       outputTool: outputTool,
