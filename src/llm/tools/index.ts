@@ -9,6 +9,7 @@ import { findFilesTool, grepCodeTool } from './search';
 import { askUserTool } from './interactive';
 import { taskCompletionTool } from './task';
 import { WrappedTool } from './types';
+import { thinkTool } from './reasoning';
 
 const writableTools: WrappedTool[] = [writeFileTool];
 const readonlyTools: WrappedTool[] = [
@@ -19,13 +20,15 @@ const readonlyTools: WrappedTool[] = [
 ];
 const searchTools: WrappedTool[] = [findFilesTool, grepCodeTool];
 const interactiveTools: WrappedTool[] = [askUserTool];
-const taskTools: WrappedTool[] = [taskCompletionTool];
+const taskTools: WrappedTool[] = [taskCompletionTool, thinkTool];
+const reasoningTools: WrappedTool[] = [thinkTool];
 const allTools: WrappedTool[] = [
   ...readonlyTools,
   ...writableTools,
   ...searchTools,
   ...interactiveTools,
   ...taskTools,
+  ...reasoningTools,
 ];
 
 export {
@@ -43,5 +46,6 @@ export {
   searchTools,
   interactiveTools,
   taskTools,
+  reasoningTools,
   allTools,
 };

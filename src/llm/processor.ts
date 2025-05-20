@@ -5,8 +5,17 @@ import { BotConfig } from '../types/config';
 import { CoreMessage, LanguageModelV1 } from 'ai';
 import { coderModel } from './client';
 import { ToolParameters, WrappedTool } from './tools/types';
-import { readonlyTools, searchTools, writableTools } from './tools';
-import { generateSystemPrompt, generateTestPrompt } from './prompts/prompts';
+import {
+  findFilesTool,
+  listDirectoryTool,
+  readFileTool,
+  readonlyTools,
+  reasoningTools,
+  searchTools,
+  writableTools,
+} from './tools';
+import { generateSystemPrompt } from './prompts/prompts';
+import { thinkTool } from './tools/reasoning';
 
 export interface CodeContext {
   filePath?: string;
@@ -40,22 +49,35 @@ const getBaseAgentConfig = (
 /**
  * Create and configure an Agent for source modification (read and write operations)
  */
-export const createSourceModifierAgent = async (
+export const createSourceModifierAgent = async <PARAMS extends ToolParameters, OUTPUT>(
   context: CodeContext,
   repositoryPath?: string,
+  outputTool?: WrappedTool<PARAMS, OUTPUT>,
   agentOptionOverrides?: Partial<AgentOptions>,
 ) => {
+  const toolsAvailable = [...readonlyTools, ...writableTools, ...searchTools, ...reasoningTools];
+
   const defaultSystemMessage = await generateSystemPrompt({
-    repositoryContext: repositoryPath ?? '',
+    toolsAvailable: toolsAvailable.map(tool => ({
+      name: tool.name,
+      description: tool.description,
+    })),
+    completionToolName: outputTool?.name,
+    findFilesTool: findFilesTool.name,
+    listDirectoryTool: listDirectoryTool.name,
+    readFileTool: readFileTool.name,
+    thinkTool: thinkTool.name,
   });
 
-  const agent = new RepoAgent({
+  const agent = new RepoAgent<PARAMS, OUTPUT>({
     ...getBaseAgentConfig(context, repositoryPath),
     systemMessage: agentOptionOverrides?.systemMessage || defaultSystemMessage,
     ...agentOptionOverrides,
   });
 
-  [...readonlyTools, ...writableTools, ...searchTools].forEach(tool => agent.registerTool(tool));
+  [...readonlyTools, ...writableTools, ...searchTools, ...(outputTool ? [outputTool] : [])].forEach(
+    tool => agent.registerTool(tool),
+  );
 
   return agent;
 };
@@ -82,10 +104,9 @@ export const processCodeModificationRequest = async <PARAMS extends ToolParamete
       maxIterations: 50,
     };
 
-    const agent = await createSourceModifierAgent(context, repositoryPath);
+    const agent = await createSourceModifierAgent(context, repositoryPath, outputTool);
 
     const result = await agent.run(modificationRequest, {
-      outputTool: outputTool,
       toolChoice: 'required',
     });
 
@@ -94,6 +115,7 @@ export const processCodeModificationRequest = async <PARAMS extends ToolParamete
         { result, modificationRequest, repositoryPath },
         'Code modification request processing completed by agent.',
       );
+
       return result;
     } else {
       logger.warn(

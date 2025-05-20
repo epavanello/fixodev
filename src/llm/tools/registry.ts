@@ -18,7 +18,7 @@ export class ToolRegistry {
    */
   register<PARAMS extends z.ZodType, OUTPUT>(tool: WrappedTool<PARAMS, OUTPUT>): this {
     if (this.tools.has(tool.name)) {
-      throw new Error(`Tool with name "${tool.name}" is already registered`);
+      return this;
     }
 
     this.tools.set(tool.name, tool);

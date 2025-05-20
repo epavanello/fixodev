@@ -320,6 +320,7 @@ function buildNestedTypeObject(
   if (!placeholders || placeholders.length === 0) return root;
 
   const sortedPlaceholders = [...placeholders].sort();
+  const placeholderSet = new Set(placeholders); // For quick lookups
 
   for (const placeholder of sortedPlaceholders) {
     const parts = placeholder.split('.');
@@ -332,29 +333,30 @@ function buildNestedTypeObject(
 
       if (i === parts.length - 1) {
         // Leaf of this specific placeholder path
-        // If this path segment was already defined as an object by a deeper path, don't overwrite it.
-        // However, if it's also an array/boolean path, ensure that characteristic is captured if not object.
         if (
           typeof currentObject[part] === 'object' &&
           Object.keys(currentObject[part]).length > 0
         ) {
-          // It's an object, potentially an array of objects. Nothing to do here for this leaf.
           continue;
         }
 
         if (arrayPaths.has(currentPath)) {
-          // Mark as an empty object; will be Array<{...}> or Array<primitive>
           currentObject[part] = {};
         } else if (booleanPaths.has(currentPath)) {
-          currentObject[part] = 'boolean';
+          // If it's a boolean path, but also a standalone placeholder (meaning it's rendered),
+          // it should be string type by default in the object, but the booleanPaths set will make it optional.
+          // If it's ONLY a boolean path and not otherwise a placeholder, then it's a primitive boolean flag.
+          if (placeholderSet.has(currentPath)) {
+            currentObject[part] = 'string'; // Will become optional string via booleanPaths
+          } else {
+            currentObject[part] = 'boolean'; // Primitive boolean flag
+          }
         } else {
-          // Default to string if not explicitly array/boolean and not already an object
           currentObject[part] = 'string';
         }
       } else {
-        // Intermediate path segment
         if (!currentObject[part] || typeof currentObject[part] !== 'object') {
-          currentObject[part] = {}; // Ensure intermediate paths are objects
+          currentObject[part] = {};
         }
         currentObject = currentObject[part] as Record<string, any>;
       }
@@ -379,11 +381,8 @@ function buildTypeScriptTypeStringRecursive(
     const value = obj[key];
     const currentPath = pathPrefix ? pathPrefix + '.' + key : key;
 
-    // Check if the current path is a boolean condition for an object, making it optional
-    const isOptionalObject =
-      booleanPaths.has(currentPath) && typeof value === 'object' && value !== null;
-
-    tsString += `${indent}readonly ${key}${isOptionalObject ? '?' : ''}: `;
+    // Property becomes optional if its path was used as a boolean condition.
+    tsString += `${indent}readonly ${key}${booleanPaths.has(currentPath) ? '?' : ''}: `;
 
     if (arrayPaths.has(currentPath)) {
       if (typeof value === 'object' && value !== null && Object.keys(value).length > 0) {
@@ -410,11 +409,6 @@ function buildTypeScriptTypeStringRecursive(
       );
       tsString += `${indent}};\n`;
     } else {
-      // If it's a boolean path but not an object, it means it's a primitive boolean (e.g. {{#if isEnabled}})
-      // The type is already set to 'boolean' by buildNestedTypeObject.
-      // If it was marked optional above but is not an object here, it implies a direct boolean flag
-      // which shouldn't be optional in its primitive form (boolean is fine, not boolean | undefined without explicit need)
-      // So, the optional marker is primarily for objects that might be absent.
       tsString += `${value};\n`;
     }
   }

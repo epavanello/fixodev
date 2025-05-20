@@ -1,6 +1,6 @@
 import { MemoryStore, MemoryEntry } from './memory';
 import { ToolRegistry } from '../tools/registry';
-import { CoreAssistantMessage, CoreMessage, CoreToolMessage, ToolResultUnion, ToolSet } from 'ai';
+import { CoreMessage, ToolResultUnion } from 'ai';
 
 /**
  * The context for an agent, including conversation history and memory

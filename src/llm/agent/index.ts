@@ -5,7 +5,7 @@ import { logger } from '../../config/logger';
 import { ToolParameters, WrappedTool } from '../tools/types';
 import { coderModel } from '../client';
 import { askUserTool } from '../tools/interactive';
-import { CoreMessage, generateText, LanguageModelV1 } from 'ai';
+import { CoreMessage, generateText, LanguageModelV1, StepResult } from 'ai';
 import { z } from 'zod';
 
 /**
@@ -51,6 +51,11 @@ export interface AgentOptions {
    * History of messages to include in the prompt
    */
   history?: CoreMessage[];
+
+  /**
+   * The output tool to use
+   */
+  outputTool?: WrappedTool<any, any>;
 }
 
 /**
@@ -71,13 +76,14 @@ export interface AgentStep {
 /**
  * LLM Agent for interacting with code
  */
-export class RepoAgent {
+export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
   private context: AgentContext;
   private model: LanguageModelV1;
   private basePath: string;
   private steps: AgentStep[] = [];
   private maxIterations: number;
   private conversationalLogging: boolean;
+  private outputTool?: WrappedTool<PARAMS, OUTPUT>;
 
   constructor(options: AgentOptions) {
     this.basePath = options.basePath;
@@ -115,12 +121,9 @@ export class RepoAgent {
   /**
    * Run the agent with a given input, iterating until task completion or max iterations
    */
-  async run<PARAMS extends ToolParameters, OUTPUT>(
+  async run(
     input: string,
-    {
-      outputTool,
-      toolChoice = 'auto',
-    }: { outputTool?: WrappedTool<PARAMS, OUTPUT>; toolChoice?: 'auto' | 'none' | 'required' },
+    { toolChoice = 'auto' }: { toolChoice?: 'auto' | 'none' | 'required' },
   ): Promise<OUTPUT | undefined> {
     try {
       this.context.addUserMessage(input);
@@ -130,9 +133,7 @@ export class RepoAgent {
       let output: OUTPUT | undefined;
 
       const registryTools = this.context.getToolRegistry();
-      if (outputTool) {
-        registryTools.register(outputTool);
-      }
+
       if (this.conversationalLogging) {
         registryTools.register(askUserTool);
       }
@@ -156,13 +157,30 @@ export class RepoAgent {
           process.stdout.write('🤔 Thinking...\r');
         }
 
+        const processToolResults = (toolResults: StepResult<any>['toolResults']) => {
+          for (const toolResult of toolResults) {
+            const toolName = toolResult.toolName;
+
+            if (this.outputTool && toolName === this.outputTool.name) {
+              needMoreProcessing = false;
+              output = toolResult.result;
+            } else {
+              // // Add tool result to context
+              this.context.addToolResultMessage(toolResult);
+            }
+          }
+        };
+
         // Send the request to OpenAI
         const response = await generateText<any>({
           model: this.model,
           messages,
           tools,
           toolChoice: toolChoice,
-          maxSteps: 10,
+          maxSteps: 5,
+          onStepFinish: step => {
+            processToolResults(step.toolResults);
+          },
         });
 
         // Extract the response content and tool calls
@@ -174,21 +192,10 @@ export class RepoAgent {
           process.stdout.write('\x1b[2K\r'); // Clear entire line and move cursor to start
         }
 
+        processToolResults(response.toolResults);
+
         // Set default for this iteration's outcome
         let iterationOutput = responseMessage || '';
-
-        // Check if the LLM wants to call tools
-        for (const toolResult of response.toolResults) {
-          const toolName = toolResult.toolName;
-
-          if (outputTool && toolName === outputTool.name) {
-            needMoreProcessing = false;
-            output = toolResult.result;
-          } else {
-            // // Add tool result to context
-            this.context.addToolResultMessage(toolResult);
-          }
-        }
 
         // No tool calls, just add content as a message and continue or finish
         iterationOutput = responseMessage || '';
