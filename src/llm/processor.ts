@@ -73,6 +73,7 @@ export const createSourceModifierAgent = async <PARAMS extends ToolParameters, O
     ...getBaseAgentConfig(context, repositoryPath),
     systemMessage: agentOptionOverrides?.systemMessage || defaultSystemMessage,
     ...agentOptionOverrides,
+    outputTool,
   });
 
   [...readonlyTools, ...writableTools, ...searchTools, ...(outputTool ? [outputTool] : [])].forEach(

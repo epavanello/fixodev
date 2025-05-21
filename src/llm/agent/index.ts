@@ -90,6 +90,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
     this.model = options.model || coderModel;
     this.maxIterations = options.maxIterations || 5;
     this.conversationalLogging = options.conversationalLogging || false;
+    this.outputTool = options.outputTool;
 
     const toolRegistry = new ToolRegistry({
       basePath: this.basePath,
