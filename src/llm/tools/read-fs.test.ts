@@ -1,4 +1,5 @@
-import { describe, it, expect, setDefaultTimeout } from 'bun:test';
+import { describe, it, expect, setDefaultTimeout, mock, spyOn } from 'bun:test';
+import * as fs from 'fs/promises';
 import {
   readFileTool,
   fileExistsTool,
@@ -293,5 +294,210 @@ describe('Tools', () => {
         fileEntry => fileEntry[0] === 'test-samples/subdir/nested.txt' && fileEntry[1] === 4,
       ),
     ).toBe(true);
+  });
+
+  // New tests for error handling and edge cases
+
+  it('should handle empty files correctly', async () => {
+    const result = await readFileTool.execute(
+      {
+        path: 'test-samples/empty.txt',
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
+    expect(result.content).toBe('');
+    expect(result.totalLines).toBe(1); // Empty file still counts as 1 line
+  });
+
+  it('should handle reading first and last lines of a file', async () => {
+    // First line
+    const firstLineResult = await readFileTool.execute(
+      {
+        path: 'test-samples/sample.txt',
+        startLine: 1,
+        endLine: 1,
+      },
+      options,
+      context,
+    );
+
+    expect(firstLineResult).toBeDefined();
+    if ('error' in firstLineResult) throw new Error(firstLineResult.error);
+    expect(firstLineResult.content).toBeDefined();
+    expect(firstLineResult.startLine).toBe(1);
+    expect(firstLineResult.endLine).toBe(1);
+
+    // Last line
+    const lastLineResult = await readFileTool.execute(
+      {
+        path: 'test-samples/sample.txt',
+        startLine: 10,
+        endLine: 10,
+      },
+      options,
+      context,
+    );
+
+    expect(lastLineResult).toBeDefined();
+    if ('error' in lastLineResult) throw new Error(lastLineResult.error);
+    expect(lastLineResult.content).toBeDefined();
+    expect(lastLineResult.startLine).toBe(10);
+    expect(lastLineResult.endLine).toBe(10);
+  });
+
+  it('should handle out-of-bounds line numbers gracefully', async () => {
+    const result = await readFileTool.execute(
+      {
+        path: 'test-samples/sample.txt',
+        startLine: 100, // Beyond file length
+        endLine: 200,
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
+    expect(result.content).toBe(''); // Should return empty string for out of bounds
+  });
+
+  it('should handle negative line numbers by defaulting to valid ranges', async () => {
+    const result = await readFileTool.execute(
+      {
+        path: 'test-samples/sample.txt',
+        startLine: -5, // Invalid, should be treated as 1
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
+    // The implementation should handle this by using Math.max(0, startLine - 1)
+    expect(result.content).toBeDefined();
+    expect(result.content.length).toBeGreaterThan(0);
+  });
+
+  it('should return error for non-existent files in readFile', async () => {
+    const result = await readFileTool.execute(
+      {
+        path: 'test-samples/does-not-exist.txt',
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    expect('error' in result).toBe(true);
+    if ('error' in result) {
+      expect(result.error).toContain('File not found');
+    }
+  });
+
+  it('should prevent path traversal attacks', async () => {
+    // Try to access a file outside the base path
+    const result = await readFileTool.execute(
+      {
+        path: '../../../etc/passwd', // Path traversal attempt
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    expect('error' in result).toBe(true);
+    if ('error' in result) {
+      expect(result.error).toContain('Access denied');
+    }
+  });
+
+  it('should respect maxResults parameter in grepCode', async () => {
+    // Test with a very low maxResults value
+    const result = await grepCodeTool.execute(
+      {
+        pattern: 'a',
+        paths: ['test-samples'],
+        maxResults: 3,
+        caseSensitive: false,
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
+    expect(result.results).toBeDefined();
+    expect(Array.isArray(result.results)).toBe(true);
+    expect(result.results.length).toBeLessThanOrEqual(3);
+  });
+
+  it('should handle regex patterns in grepCode', async () => {
+    // Test with a regex pattern
+    const result = await grepCodeTool.execute(
+      {
+        pattern: '\\btest\\b', // Word boundary regex for "test"
+        paths: ['test-samples'],
+        maxResults: 10,
+        caseSensitive: false,
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
+    expect(result.results).toBeDefined();
+    expect(Array.isArray(result.results)).toBe(true);
+    // Results should only include matches for the whole word "test"
+    result.results.forEach(r => {
+      expect(r.content.match(/\btest\b/i)).not.toBeNull();
+    });
+  });
+
+  it('should handle complex glob patterns in findFiles', async () => {
+    // Test with a more complex pattern
+    const result = await findFilesTool.execute(
+      {
+        pattern: '*.ts', // Glob pattern for all .ts files
+        directory: 'test-samples',
+        maxResults: 10,
+      },
+      options,
+      context,
+    );
+
+    expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
+    expect(result.files).toBeDefined();
+    expect(Array.isArray(result.files)).toBe(true);
+    // All results should be .ts files
+    result.files.forEach(file => {
+      expect(file[0].endsWith('.ts')).toBe(true);
+    });
+  });
+
+  it('should provide readable results for readFileTool', () => {
+    const readableResult = readFileTool.getReadableResult({
+      content: 'This is a test content that should be truncated in the readable result',
+      totalLines: 1,
+    });
+
+    expect(readableResult).toBeDefined();
+    expect(readableResult.length).toBeLessThan(60); // Should be truncated
+    expect(readableResult).toContain('...');
+  });
+
+  it('should provide error message in readable results', () => {
+    const readableResult = readFileTool.getReadableResult({
+      error: 'Test error message',
+    });
+
+    expect(readableResult).toBeDefined();
+    expect(readableResult).toContain('Error:');
+    expect(readableResult).toContain('Test error message');
   });
 });
