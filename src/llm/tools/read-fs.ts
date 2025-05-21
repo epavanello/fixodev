@@ -437,8 +437,8 @@ export const grepCodeTool = wrapTool({
   },
 });
 
-export const findFilesTool = wrapTool({
-  name: 'findFiles',
+export const findFileNamesTool = wrapTool({
+  name: 'findFileNames',
   description:
     'Find files by name pattern. Supports glob patterns, regex, or simple text matching. Returns a list of [filePath, lineCount] tuples.',
   schema: z.object({

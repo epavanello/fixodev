@@ -8,6 +8,7 @@ import { askUserTool } from '../tools/interactive';
 import { CoreMessage, generateText, StepResult } from 'ai';
 import { z } from 'zod';
 import { formatDataForLogging } from '@/utils/json';
+import { showFileTreeTool } from '../tools/read-fs';
 
 /**
  * Options for creating an agent
@@ -143,7 +144,24 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
       const tools = registryTools.getUnwrappedTools();
       let totalCostInMillionths = 0;
 
-      logger.debug({ tools }, 'Tools');
+      const showFileTreeToolResult = await (
+        registryTools.get(showFileTreeTool.name) as typeof showFileTreeTool
+      ).execute(
+        { path: '' },
+        { messages: [], toolCallId: showFileTreeTool.name },
+        {
+          basePath: this.basePath,
+        },
+      );
+
+      this.context.addToolResultMessage({
+        toolName: showFileTreeTool.name,
+        toolCallId: '1',
+        args: { path: '' },
+        result: showFileTreeToolResult,
+        type: 'tool-result',
+      });
+
       while (needMoreProcessing && currentIteration < this.maxIterations) {
         currentIteration++;
 

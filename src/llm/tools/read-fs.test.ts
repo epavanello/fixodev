@@ -6,7 +6,7 @@ import {
   listDirectoryTool,
   showFileTreeTool,
   grepCodeTool,
-  findFilesTool,
+  findFileNamesTool,
   FileEntry,
 } from './read-fs';
 import { ToolContext } from './types';
@@ -249,7 +249,7 @@ describe('Tools', () => {
   });
 
   it('should find files by pattern', async () => {
-    const result = await findFilesTool.execute(
+    const result = await findFileNamesTool.execute(
       {
         pattern: 'sample',
         directory: 'test-samples',
@@ -273,7 +273,7 @@ describe('Tools', () => {
   });
 
   it('should find files in subdirectories', async () => {
-    const result = await findFilesTool.execute(
+    const result = await findFileNamesTool.execute(
       {
         pattern: 'nested',
         directory: 'test-samples',
@@ -460,7 +460,7 @@ describe('Tools', () => {
 
   it('should handle complex glob patterns in findFiles', async () => {
     // Test with a more complex pattern
-    const result = await findFilesTool.execute(
+    const result = await findFileNamesTool.execute(
       {
         pattern: '*.ts', // Glob pattern for all .ts files
         directory: 'test-samples',
