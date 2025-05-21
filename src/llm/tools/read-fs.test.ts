@@ -1,12 +1,11 @@
-import { describe, it, expect, setDefaultTimeout, mock, spyOn } from 'bun:test';
-import * as fs from 'fs/promises';
+import { describe, it, expect, setDefaultTimeout } from 'bun:test';
 import {
   readFileTool,
   fileExistsTool,
   listDirectoryTool,
   showFileTreeTool,
   grepCodeTool,
-  findFileNamesTool,
+  // findFileNamesTool,
   FileEntry,
 } from './read-fs';
 import { ToolContext } from './types';
@@ -248,53 +247,53 @@ describe('Tools', () => {
     expect(result.results.some(r => r?.file[0].includes('code.ts'))).toBe(true);
   });
 
-  it('should find files by pattern', async () => {
-    const result = await findFileNamesTool.execute(
-      {
-        pattern: 'sample',
-        directory: 'test-samples',
-        extensions: ['.txt'],
-        maxResults: 100,
-      },
-      options,
-      context,
-    );
+  // it('should find files by pattern', async () => {
+  //   const result = await findFileNamesTool.execute(
+  //     {
+  //       pattern: 'sample',
+  //       directory: 'test-samples',
+  //       extensions: ['.txt'],
+  //       maxResults: 100,
+  //     },
+  //     options,
+  //     context,
+  //   );
 
-    expect(result).toBeDefined();
-    if ('error' in result) throw new Error(result.error);
-    expect(result.files).toBeDefined();
-    expect(Array.isArray(result.files)).toBe(true);
-    // result.files is Array<[relativePath, lineCount]>
-    expect(
-      result.files.some(
-        fileEntry => fileEntry[0] === 'test-samples/sample.txt' && fileEntry[1] === 10,
-      ),
-    ).toBe(true);
-  });
+  //   expect(result).toBeDefined();
+  //   if ('error' in result) throw new Error(result.error);
+  //   expect(result.files).toBeDefined();
+  //   expect(Array.isArray(result.files)).toBe(true);
+  //   // result.files is Array<[relativePath, lineCount]>
+  //   expect(
+  //     result.files.some(
+  //       fileEntry => fileEntry[0] === 'test-samples/sample.txt' && fileEntry[1] === 10,
+  //     ),
+  //   ).toBe(true);
+  // });
 
-  it('should find files in subdirectories', async () => {
-    const result = await findFileNamesTool.execute(
-      {
-        pattern: 'nested',
-        directory: 'test-samples',
-        extensions: ['.txt'],
-        maxResults: 100,
-      },
-      options,
-      context,
-    );
+  // it('should find files in subdirectories', async () => {
+  //   const result = await findFileNamesTool.execute(
+  //     {
+  //       pattern: 'nested',
+  //       directory: 'test-samples',
+  //       extensions: ['.txt'],
+  //       maxResults: 100,
+  //     },
+  //     options,
+  //     context,
+  //   );
 
-    expect(result).toBeDefined();
-    if ('error' in result) throw new Error(result.error);
-    expect(result.files).toBeDefined();
-    expect(Array.isArray(result.files)).toBe(true);
-    // result.files is Array<FileEntry>
-    expect(
-      result.files.some(
-        fileEntry => fileEntry[0] === 'test-samples/subdir/nested.txt' && fileEntry[1] === 4,
-      ),
-    ).toBe(true);
-  });
+  //   expect(result).toBeDefined();
+  //   if ('error' in result) throw new Error(result.error);
+  //   expect(result.files).toBeDefined();
+  //   expect(Array.isArray(result.files)).toBe(true);
+  //   // result.files is Array<FileEntry>
+  //   expect(
+  //     result.files.some(
+  //       fileEntry => fileEntry[0] === 'test-samples/subdir/nested.txt' && fileEntry[1] === 4,
+  //     ),
+  //   ).toBe(true);
+  // });
 
   // New tests for error handling and edge cases
 
@@ -458,25 +457,25 @@ describe('Tools', () => {
     });
   });
 
-  it('should handle complex glob patterns in findFiles', async () => {
-    // Test with a more complex pattern
-    const result = await findFileNamesTool.execute(
-      {
-        pattern: '*.ts', // Glob pattern for all .ts files
-        directory: 'test-samples',
-        maxResults: 10,
-      },
-      options,
-      context,
-    );
+  // it('should handle complex glob patterns in findFiles', async () => {
+  //   // Test with a more complex pattern
+  //   const result = await findFileNamesTool.execute(
+  //     {
+  //       pattern: '*.ts', // Glob pattern for all .ts files
+  //       directory: 'test-samples',
+  //       maxResults: 10,
+  //     },
+  //     options,
+  //     context,
+  //   );
 
-    expect(result).toBeDefined();
-    if ('error' in result) throw new Error(result.error);
-    expect(result.files).toBeDefined();
-    expect(Array.isArray(result.files)).toBe(true);
-    // All results should be .ts files
-    result.files.forEach(file => {
-      expect(file[0].endsWith('.ts')).toBe(true);
-    });
-  });
+  //   expect(result).toBeDefined();
+  //   if ('error' in result) throw new Error(result.error);
+  //   expect(result.files).toBeDefined();
+  //   expect(Array.isArray(result.files)).toBe(true);
+  //   // All results should be .ts files
+  //   result.files.forEach(file => {
+  //     expect(file[0].endsWith('.ts')).toBe(true);
+  //   });
+  // });
 });

@@ -17,8 +17,6 @@ const __dirname = path.dirname(__filename);
 // --- Argument Types ---
 export type SystemArgs = {
   readonly completionToolName?: string;
-  readonly findFilesTool: string;
-  readonly listDirectoryTool: string;
   readonly maxLines: string;
   readonly maxReadFileCalls: string;
   readonly readFileTool: string;

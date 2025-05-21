@@ -8,7 +8,7 @@ import { ToolParameters, WrappedTool } from './tools/types';
 import { readonlyTools, reasoningTools, writableTools } from './tools';
 import { generateSystemPrompt } from './prompts/prompts';
 import { thinkTool } from './tools/reasoning';
-import { findFileNamesTool, listDirectoryTool, readFileTool } from './tools/read-fs';
+import { readFileTool } from './tools/read-fs';
 
 export interface CodeContext {
   filePath?: string;
@@ -63,8 +63,6 @@ export const createSourceModifierAgent = async <PARAMS extends ToolParameters, O
       description: tool.description,
     })),
     completionToolName: outputTool?.name,
-    findFilesTool: findFileNamesTool.name,
-    listDirectoryTool: listDirectoryTool.name,
     readFileTool: readFileTool.name,
     thinkTool: thinkTool.name,
   });

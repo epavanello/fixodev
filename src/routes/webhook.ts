@@ -154,7 +154,6 @@ router.post('/github', async c => {
         triggeredBy: senderLogin,
         installationId: installationId,
         repositoryUrl: repositoryUrl,
-        message: `Issue Title: ${issueTitle} - Command: ${commandToProcess}`, // Added message with title and command
       };
 
       // Assuming jobQueue.addJob can handle this new job structure.
