@@ -193,10 +193,10 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
           messages,
           tools,
           toolChoice: toolChoice,
-          maxSteps: 5,
-          onStepFinish: step => {
-            processToolResults(step.toolResults);
-          },
+          // maxSteps: 5,
+          // onStepFinish: step => {
+          //   processToolResults(step.toolResults);
+          // },
         });
 
         // Extract the response content and tool calls

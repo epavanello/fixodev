@@ -154,9 +154,21 @@ describe('Tools', () => {
     expect(result.directories).toBeDefined();
     expect(Array.isArray(result.files)).toBe(true);
     expect(Array.isArray(result.directories)).toBe(true);
-    expect(result.files).toContain('sample.txt');
-    expect(result.files).toContain('code.ts');
-    expect(result.directories).toContain('subdir');
+
+    // Map and verify the expected files and their line counts
+    const expectedFiles = [
+      { lineCount: 28, name: 'code.ts' },
+      { lineCount: 2, name: 'write-test.txt' },
+      { lineCount: 10, name: 'sample.txt' },
+    ];
+
+    expectedFiles.forEach(expected => {
+      const foundFile = result.files?.find(file => file.name === expected.name);
+      expect(foundFile).toBeDefined();
+      expect(foundFile?.lineCount).toBe(expected.lineCount);
+    });
+
+    expect(result.directories?.[0]).toContain('subdir');
   });
 
   it('should list nested directory contents', async () => {
@@ -169,7 +181,7 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
-    expect(result.files).toContain('nested.txt');
+    expect(result.files?.[0]?.name).toMatchObject({ name: 'nested.txt' });
   });
 
   it('should show the file tree of a directory', async () => {

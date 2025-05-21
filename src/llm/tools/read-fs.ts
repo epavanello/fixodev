@@ -137,14 +137,21 @@ export const listDirectoryTool = wrapTool({
       const dirPath = join(context.basePath, params.path);
 
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
       const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
-
       const directories = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
+
+      const fileDetails = await Promise.all(
+        files.map(async file => {
+          const filePath = join(dirPath, file);
+          const content = await fs.readFile(filePath, 'utf-8');
+          const lineCount = content.split('\n').length;
+          return { name: file, lineCount };
+        }),
+      );
 
       return {
         path: params.path,
-        files,
+        files: fileDetails,
         directories,
       };
     } catch (error) {
