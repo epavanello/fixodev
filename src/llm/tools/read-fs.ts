@@ -437,97 +437,97 @@ export const grepCodeTool = wrapTool({
   },
 });
 
-export const findFileNamesTool = wrapTool({
-  name: 'findFileNames',
-  description:
-    'Find files by name pattern. Supports glob patterns, regex, or simple text matching. Returns a list of [filePath, lineCount] tuples.',
-  schema: z.object({
-    pattern: z
-      .string()
-      .min(1)
-      .describe(
-        'Pattern to search for in file names. Can be a simple glob pattern, regex, or text pattern',
-      ),
-    directory: z
-      .string()
-      .optional()
-      .default('.')
-      .describe('Directory to search in, relative to the repository root'),
-    extensions: z
-      .array(z.string())
-      .optional()
-      .describe('File extensions to include (e.g., ".ts", ".js")'),
-    maxResults: z.number().optional().default(20).describe('Maximum number of results to return'),
-  }),
-  execute: async (params, _, context) => {
-    if (!context) {
-      throw new Error('Context is required');
-    }
+// export const findFileNamesTool = wrapTool({
+//   name: 'findFileNames',
+//   description:
+//     'Find files by name pattern. Supports glob patterns, regex, or simple text matching. Returns a list of [filePath, lineCount] tuples.',
+//   schema: z.object({
+//     pattern: z
+//       .string()
+//       .min(1)
+//       .describe(
+//         'Pattern to search for in file names. Can be a simple glob pattern, regex, or text pattern',
+//       ),
+//     directory: z
+//       .string()
+//       .optional()
+//       .default('.')
+//       .describe('Directory to search in, relative to the repository root'),
+//     extensions: z
+//       .array(z.string())
+//       .optional()
+//       .describe('File extensions to include (e.g., ".ts", ".js")'),
+//     maxResults: z.number().optional().default(20).describe('Maximum number of results to return'),
+//   }),
+//   execute: async (params, _, context) => {
+//     if (!context) {
+//       throw new Error('Context is required');
+//     }
 
-    try {
-      const basePath = context.basePath;
-      const ignoreDirs = await getIgnoreDirs(context.basePath);
-      const ignoreFiles = await getIgnoreFiles(context.basePath);
+//     try {
+//       const basePath = context.basePath;
+//       const ignoreDirs = await getIgnoreDirs(context.basePath);
+//       const ignoreFiles = await getIgnoreFiles(context.basePath);
 
-      // Prepare search directory
-      const searchDir = path.join(basePath, params.directory);
-      assertPathIsWithinBasePath(basePath, searchDir);
+//       // Prepare search directory
+//       const searchDir = path.join(basePath, params.directory);
+//       assertPathIsWithinBasePath(basePath, searchDir);
 
-      // Create glob patterns based on extensions
-      const patterns: string[] = [];
+//       // Create glob patterns based on extensions
+//       const patterns: string[] = [];
 
-      if (params.extensions?.length) {
-        for (const ext of params.extensions) {
-          const extension = ext.startsWith('.') ? ext : `.${ext}`;
-          patterns.push(`**/*${extension}`);
-        }
-      } else {
-        patterns.push(`**/*`);
-      }
+//       if (params.extensions?.length) {
+//         for (const ext of params.extensions) {
+//           const extension = ext.startsWith('.') ? ext : `.${ext}`;
+//           patterns.push(`**/*${extension}`);
+//         }
+//       } else {
+//         patterns.push(`**/*`);
+//       }
 
-      // Find all matching files
-      const allFiles = await fastGlob(patterns, {
-        onlyFiles: true,
-        cwd: searchDir,
-        ignore: [
-          ...(ignoreDirs ?? []).map(d => `**/${d}/**`),
-          ...(ignoreFiles ?? []).map(f => `**/${f}`),
-        ],
-      });
+//       // Find all matching files
+//       const allFiles = await fastGlob(patterns, {
+//         onlyFiles: true,
+//         cwd: searchDir,
+//         ignore: [
+//           ...(ignoreDirs ?? []).map(d => `**/${d}/**`),
+//           ...(ignoreFiles ?? []).map(f => `**/${f}`),
+//         ],
+//       });
 
-      // Convert glob pattern to regex if needed
-      let patternRegex: RegExp;
-      try {
-        // First try to use it as a regex
-        patternRegex = new RegExp(params.pattern, 'i');
-      } catch {
-        // If it fails, convert glob pattern to regex
-        const globPattern = params.pattern
-          .replace(/\./g, '\\.') // Escape dots
-          .replace(/\*/g, '.*') // Convert * to .*
-          .replace(/\?/g, '.'); // Convert ? to .
-        patternRegex = new RegExp(`^${globPattern}$`, 'i');
-      }
+//       // Convert glob pattern to regex if needed
+//       let patternRegex: RegExp;
+//       try {
+//         // First try to use it as a regex
+//         patternRegex = new RegExp(params.pattern, 'i');
+//       } catch {
+//         // If it fails, convert glob pattern to regex
+//         const globPattern = params.pattern
+//           .replace(/\./g, '\\.') // Escape dots
+//           .replace(/\*/g, '.*') // Convert * to .*
+//           .replace(/\?/g, '.'); // Convert ? to .
+//         patternRegex = new RegExp(`^${globPattern}$`, 'i');
+//       }
 
-      // Filter by pattern in filename
-      const matchedFilesRelativePaths = allFiles
-        .filter(file => patternRegex.test(path.basename(file)))
-        .filter(file => !ignoreFiles.includes(path.basename(file)))
-        .slice(0, params.maxResults)
-        .map(file => path.join(params.directory, file)); // These are relative to basePath
+//       // Filter by pattern in filename
+//       const matchedFilesRelativePaths = allFiles
+//         .filter(file => patternRegex.test(path.basename(file)))
+//         .filter(file => !ignoreFiles.includes(path.basename(file)))
+//         .slice(0, params.maxResults)
+//         .map(file => path.join(params.directory, file)); // These are relative to basePath
 
-      // Now, get the formatted entries with line counts
-      const filesWithLineCounts = await Promise.all(
-        matchedFilesRelativePaths.map(async relativeFilePath => {
-          const absoluteFilePath = path.join(basePath, relativeFilePath);
-          // We want the relative path in the output, so pass basePath as the second argument to the helper.
-          return getFormattedFileEntry(absoluteFilePath, basePath);
-        }),
-      );
+//       // Now, get the formatted entries with line counts
+//       const filesWithLineCounts = await Promise.all(
+//         matchedFilesRelativePaths.map(async relativeFilePath => {
+//           const absoluteFilePath = path.join(basePath, relativeFilePath);
+//           // We want the relative path in the output, so pass basePath as the second argument to the helper.
+//           return getFormattedFileEntry(absoluteFilePath, basePath);
+//         }),
+//       );
 
-      return { files: filesWithLineCounts };
-    } catch (error) {
-      return errorToToolResult(error);
-    }
-  },
-});
+//       return { files: filesWithLineCounts };
+//     } catch (error) {
+//       return errorToToolResult(error);
+//     }
+//   },
+// });
