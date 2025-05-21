@@ -482,12 +482,26 @@ async function generateFunctionsForSinglePromptFile(
 
     const relativeTemplatePath = path.relative(PROMPTS_DIR, templateFilePath).replace(/\\/g, '/');
 
-    let functionDef = `\n/**\n * Generates the '${templateFilename}' prompt using Handlebars.\n * Template sub-path relative to prompts directory: ${relativeTemplatePath}\n */\n`;
-    functionDef += `export async function ${functionName}(\n  args: ${argsTypeName}\n): Promise<string> {\n`;
-    functionDef += `  const templatePath = path.resolve(__dirname, '../../prompts', '${relativeTemplatePath}');\n`;
-    functionDef += `  const templateContent = await fs.readFile(templatePath, 'utf-8');\n`;
-    functionDef += `  const compiledTemplate = Handlebars.compile(templateContent);\n`;
-    functionDef += `  return compiledTemplate(args);\n`;
+    let functionDef = `
+/**
+ * Generates the '${templateFilename}' prompt using Handlebars.
+ * Template sub-path relative to prompts directory: ${relativeTemplatePath}
+ */
+`;
+    functionDef += `export async function ${functionName}(
+  args: ${argsTypeName}
+): Promise<string> {
+`;
+    // Use process.cwd() to ensure correct path resolution in Docker and dev
+    // process.cwd() will be /app in the Docker container, and prompts are in /app/prompts.
+    functionDef += `  const templatePath = path.resolve(process.cwd(), 'prompts', '${relativeTemplatePath}');
+`;
+    functionDef += `  const templateContent = await fs.readFile(templatePath, 'utf-8');
+`;
+    functionDef += `  const compiledTemplate = Handlebars.compile(templateContent);
+`;
+    functionDef += `  return compiledTemplate(args);
+`;
     functionDef += '}\n';
 
     return { typeDef, functionDef };

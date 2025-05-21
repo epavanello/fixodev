@@ -60,7 +60,7 @@ export type TestArgs = {
 export async function generateSystemPrompt(
   args: SystemArgs
 ): Promise<string> {
-  const templatePath = path.resolve(__dirname, '../../prompts', 'system.md');
+  const templatePath = path.resolve(process.cwd(), 'prompts', 'system.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
   const compiledTemplate = Handlebars.compile(templateContent);
   return compiledTemplate(args);
@@ -74,7 +74,7 @@ export async function generateSystemPrompt(
 export async function generateTestPrompt(
   args: TestArgs
 ): Promise<string> {
-  const templatePath = path.resolve(__dirname, '../../prompts', 'test.md');
+  const templatePath = path.resolve(process.cwd(), 'prompts', 'test.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
   const compiledTemplate = Handlebars.compile(templateContent);
   return compiledTemplate(args);
