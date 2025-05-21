@@ -3,7 +3,7 @@ import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
 import { ToolParameters, WrappedTool } from '../tools/types';
-import { coderModel } from '../client';
+import { coderModel } from '../models';
 import { askUserTool } from '../tools/interactive';
 import { CoreMessage, generateText, LanguageModelV1, StepResult } from 'ai';
 import { z } from 'zod';
@@ -168,6 +168,22 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
             }
             // // Add tool result to context
             this.context.addToolResultMessage(toolResult);
+
+            const tool = registryTools.get(toolName);
+            if (!tool) {
+              logger.warn({ toolName }, 'Tool not found');
+              continue;
+            }
+
+            logger.info(
+              `${tool.name}(${
+                tool.getReadableParams?.(toolResult.args) ||
+                JSON.stringify(toolResult.args, null, 2)
+              }) => ${
+                tool.getReadableResult?.(toolResult.result) ||
+                JSON.stringify(toolResult.result, null, 2)
+              }`,
+            );
           }
         };
 

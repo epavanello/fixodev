@@ -6,7 +6,8 @@ import { wrapTool } from './types';
  */
 export const thinkTool = wrapTool({
   name: 'think',
-  description: 'Think about the task and the objective. Mandatory before any other tool is called.',
+  description:
+    'Think about the task and the objective. Mandatory before any other write tool is called.',
   schema: z.object({
     thought: z.string().describe('A thought about the task and the objective'),
   }),

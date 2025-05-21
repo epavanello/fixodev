@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import readline from 'readline/promises';
 import { processCodeModificationRequest } from './llm/processor';
 import { loadBotConfig } from './utils/yaml';
-import { taskCompletionTool } from './llm/tools';
+import { taskCompletionTool } from './llm/tools/task';
 
 async function main() {
   const program = new Command();

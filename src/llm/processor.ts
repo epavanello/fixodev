@@ -3,19 +3,12 @@ import { GitHubError } from '../utils/error';
 import { RepoAgent, AgentOptions } from './agent';
 import { BotConfig } from '../types/config';
 import { CoreMessage, LanguageModelV1 } from 'ai';
-import { coderModel } from './client';
+import { coderModel } from './models';
 import { ToolParameters, WrappedTool } from './tools/types';
-import {
-  findFilesTool,
-  listDirectoryTool,
-  readFileTool,
-  readonlyTools,
-  reasoningTools,
-  searchTools,
-  writableTools,
-} from './tools';
+import { readonlyTools, reasoningTools, writableTools } from './tools';
 import { generateSystemPrompt } from './prompts/prompts';
 import { thinkTool } from './tools/reasoning';
+import { findFilesTool, listDirectoryTool, readFileTool } from './tools/read-fs';
 
 export interface CodeContext {
   filePath?: string;
@@ -55,7 +48,12 @@ export const createSourceModifierAgent = async <PARAMS extends ToolParameters, O
   outputTool?: WrappedTool<PARAMS, OUTPUT>,
   agentOptionOverrides?: Partial<AgentOptions>,
 ) => {
-  const toolsAvailable = [...readonlyTools, ...writableTools, ...searchTools, ...reasoningTools];
+  const toolsAvailable = [
+    ...readonlyTools,
+    ...writableTools,
+    ...reasoningTools,
+    ...(outputTool ? [outputTool] : []),
+  ];
 
   const defaultSystemMessage = await generateSystemPrompt({
     toolsAvailable: toolsAvailable.map(tool => ({
@@ -76,9 +74,7 @@ export const createSourceModifierAgent = async <PARAMS extends ToolParameters, O
     outputTool,
   });
 
-  [...readonlyTools, ...writableTools, ...searchTools, ...(outputTool ? [outputTool] : [])].forEach(
-    tool => agent.registerTool(tool),
-  );
+  toolsAvailable.forEach(tool => agent.registerTool(tool));
 
   return agent;
 };

@@ -1,12 +1,13 @@
 import { describe, it, expect, setDefaultTimeout } from 'bun:test';
 import {
   readFileTool,
-  writeFileTool,
   fileExistsTool,
   listDirectoryTool,
   showFileTreeTool,
-} from './file';
-import { grepCodeTool, findFilesTool } from './search';
+  grepCodeTool,
+  findFilesTool,
+} from './read-fs';
+import { writeFileTool } from './write-fs';
 import { ToolContext } from './types';
 
 setDefaultTimeout(60 * 1000 * 10);
@@ -183,8 +184,8 @@ describe('Tools', () => {
     expect(result).toBeDefined();
     expect(result.tree).toBeDefined();
     expect(Array.isArray(result.tree)).toBe(true);
-    expect(result.tree.some(entry => entry.name === 'sample.txt')).toBe(true);
-    expect(result.tree.some(entry => entry.name === 'subdir')).toBe(true);
+    expect(result.tree?.some(entry => entry.name === 'sample.txt')).toBe(true);
+    expect(result.tree?.some(entry => entry.name === 'subdir')).toBe(true);
   });
 
   it('should search for text in files', async () => {

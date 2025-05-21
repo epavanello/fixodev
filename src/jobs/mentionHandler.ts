@@ -12,7 +12,7 @@ import { JobError } from '../utils/error';
 import { envConfig } from '../config/env';
 import { ensureForkExists, ForkResult } from '../git/fork';
 import { processCodeModificationRequest } from '@/llm/processor';
-import { taskCompletionTool } from '@/llm/tools';
+import { taskCompletionTool } from '@/llm/tools/task';
 
 const handlerLogger = rootLogger.child({ context: 'MentionOnIssueJobHandler' });
 

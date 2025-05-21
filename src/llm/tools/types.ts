@@ -1,4 +1,3 @@
-import { logger } from '@/config/logger';
 import { ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 
@@ -25,23 +24,11 @@ export function wrapTool<PARAMS extends ToolParameters = any, OUTPUT = any>(conf
 }) {
   return {
     name: config.name,
-    execute: async (
-      params: z.infer<PARAMS>,
-      options?: ToolExecutionOptions,
-      context?: ToolContext,
-    ) => {
-      const result = await config.execute(params, options, context);
-      logger.info(
-        `${config.name}(${
-          config.getReadableParams?.(params) || JSON.stringify(params, null, 2)
-        }) => ${config.getReadableResult?.(result) || JSON.stringify(result, null, 2)}`,
-      );
-      return result;
-    },
+    execute: config.execute,
     description: config.description,
     parameters: config.schema,
     getReadableParams: config.getReadableParams || (params => JSON.stringify(params)),
-    getReadableResult: config.getReadableResult || (result => result),
+    getReadableResult: config.getReadableResult || (result => JSON.stringify(result)),
   };
 }
 
