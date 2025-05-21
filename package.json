@@ -8,9 +8,9 @@
     "test": "test"
   },
   "scripts": {
-    "build": "bun build ./src/app.ts --outdir ./dist --target=bun",
-    "dev:prompts": "bun run scripts/generate-prompts.ts",
-    "dev": "concurrently --kill-others-on-fail \"bun --watch src/app.ts\" \"bun run dev:prompts\"",
+    "build": "bun run build.ts",
+    "build:prompts": "bun run scripts/generate-prompts.ts",
+    "dev": "concurrently --kill-others-on-fail \"bun --watch src/app.ts\" \"bun run scripts/generate-prompts.ts --watch\"",
     "dev:proxy": "ngrok http 3000",
     "start": "bun run dist/app.js",
     "lint": "eslint 'src/**/*.ts'",
@@ -64,7 +64,7 @@
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
-    "chokidar": "^4.0.3",
+    "bun-copy-plugin": "^0.2.1",
     "concurrently": "^9.1.2",
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^9.0.0",

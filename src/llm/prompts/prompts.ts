@@ -55,12 +55,12 @@ export type TestArgs = {
 
 /**
  * Generates the 'system.md' prompt using Handlebars.
- * Template path: system.md
+ * Template sub-path relative to prompts directory: system.md
  */
 export async function generateSystemPrompt(
   args: SystemArgs
 ): Promise<string> {
-  const templatePath = path.resolve(__dirname, 'system.md');
+  const templatePath = path.resolve(__dirname, '../../prompts', 'system.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
   const compiledTemplate = Handlebars.compile(templateContent);
   return compiledTemplate(args);
@@ -69,12 +69,12 @@ export async function generateSystemPrompt(
 
 /**
  * Generates the 'test.md' prompt using Handlebars.
- * Template path: test.md
+ * Template sub-path relative to prompts directory: test.md
  */
 export async function generateTestPrompt(
   args: TestArgs
 ): Promise<string> {
-  const templatePath = path.resolve(__dirname, 'test.md');
+  const templatePath = path.resolve(__dirname, '../../prompts', 'test.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
   const compiledTemplate = Handlebars.compile(templateContent);
   return compiledTemplate(args);

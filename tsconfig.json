@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -19,6 +19,6 @@
     },
     "types": ["bun-types"]
   },
-  "include": ["src/**/*", "scripts/**/*"], // Added scripts/
+  "include": ["src/**/*", "scripts/**/*", "build.ts"],
   "exclude": ["node_modules", "dist"]
 }

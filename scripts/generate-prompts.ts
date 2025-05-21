@@ -1,9 +1,10 @@
 import * as fs from 'fs/promises';
+import { watch } from 'fs'; // Bun's built-in watcher
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import chokidar from 'chokidar';
 import * as Handlebars from 'handlebars';
 import { type AST } from '@handlebars/parser';
+import fg from 'fast-glob'; // For recursive file search
 
 // --- Type Guards ---
 // function isNode(node: any): node is AST.Node { // Unused, removing
@@ -441,8 +442,11 @@ function typeObjectToTypeScriptString(
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PROMPTS_DIR = path.resolve(__dirname, '../src/llm/prompts');
-const OUTPUT_PROMPTS_FILE = path.resolve(PROMPTS_DIR, 'prompts.ts');
+const PROMPTS_DIR = path.resolve(__dirname, '../prompts');
+const OUTPUT_PROMPTS_FILE = path.resolve(
+  path.resolve(__dirname, '../src/llm/prompts'),
+  'prompts.ts',
+);
 
 /**
  * Converts a kebab-case or snake_case filename to a PascalCase string.
@@ -478,9 +482,9 @@ async function generateFunctionsForSinglePromptFile(
 
     const relativeTemplatePath = path.relative(PROMPTS_DIR, templateFilePath).replace(/\\/g, '/');
 
-    let functionDef = `\n/**\n * Generates the '${templateFilename}' prompt using Handlebars.\n * Template path: ${relativeTemplatePath}\n */\n`;
+    let functionDef = `\n/**\n * Generates the '${templateFilename}' prompt using Handlebars.\n * Template sub-path relative to prompts directory: ${relativeTemplatePath}\n */\n`;
     functionDef += `export async function ${functionName}(\n  args: ${argsTypeName}\n): Promise<string> {\n`;
-    functionDef += `  const templatePath = path.resolve(__dirname, '${relativeTemplatePath}');\n`;
+    functionDef += `  const templatePath = path.resolve(__dirname, '../../prompts', '${relativeTemplatePath}');\n`;
     functionDef += `  const templateContent = await fs.readFile(templatePath, 'utf-8');\n`;
     functionDef += `  const compiledTemplate = Handlebars.compile(templateContent);\n`;
     functionDef += `  return compiledTemplate(args);\n`;
@@ -496,11 +500,12 @@ async function generateFunctionsForSinglePromptFile(
 async function regenerateAllPromptsFile(): Promise<void> {
   console.log('Scanning for prompt templates in:', PROMPTS_DIR);
   try {
-    const files = await fs.readdir(PROMPTS_DIR);
-    const templateFiles = files.filter(
-      file =>
-        (file.endsWith('.md') || file.endsWith('.hbs') || file.endsWith('.handlebars')) &&
-        path.join(PROMPTS_DIR, file) !== OUTPUT_PROMPTS_FILE,
+    const templateFilesPaths = await fg(
+      path.join(PROMPTS_DIR, '**/*.{md,hbs,handlebars}').replace(/\\/g, '/'),
+      {
+        ignore: [OUTPUT_PROMPTS_FILE],
+        absolute: true,
+      },
     );
 
     let outputContent = `/* eslint-disable */
@@ -524,12 +529,11 @@ const __dirname = path.dirname(__filename);
 
     const functionDefinitions: string[] = [];
 
-    if (templateFiles.length === 0) {
+    if (templateFilesPaths.length === 0) {
       console.log('No .md, .hbs, or .handlebars prompt templates found.');
       outputContent += '\n// No prompt templates found to generate functions for.\n';
     } else {
-      for (const templateFile of templateFiles) {
-        const filePath = path.join(PROMPTS_DIR, templateFile);
+      for (const filePath of templateFilesPaths) {
         const result = await generateFunctionsForSinglePromptFile(filePath);
         if (result) {
           outputContent += result.typeDef + '\n';
@@ -543,8 +547,46 @@ const __dirname = path.dirname(__filename);
 
     await fs.writeFile(OUTPUT_PROMPTS_FILE, outputContent);
     console.log(
-      `Successfully generated ${templateFiles.length} prompt function(s) into: ${OUTPUT_PROMPTS_FILE}`,
+      `Successfully generated ${templateFilesPaths.length} prompt function(s) into: ${OUTPUT_PROMPTS_FILE}`,
     );
+
+    const watchMode = process.argv.includes('--watch');
+
+    if (watchMode) {
+      console.log(
+        `Watching for changes in .md, .hbs, .handlebars files in ${PROMPTS_DIR} (excluding ${path.basename(OUTPUT_PROMPTS_FILE)})...`,
+      );
+
+      const watcher = watch(PROMPTS_DIR, { recursive: true }, async (event, filename) => {
+        if (filename) {
+          const fullPath = path.join(PROMPTS_DIR, filename); // filename might be relative to PROMPTS_DIR
+          // Check if it's a template file and not the output file itself
+          if (
+            (fullPath.endsWith('.md') ||
+              fullPath.endsWith('.hbs') ||
+              fullPath.endsWith('.handlebars')) &&
+            path.resolve(fullPath) !== path.resolve(OUTPUT_PROMPTS_FILE)
+          ) {
+            console.log(`Detected ${event} in ${filename}. Regenerating prompts...`);
+            await regenerateAllPromptsFile();
+          }
+        } else if (event === 'rename') {
+          // 'rename' events on the directory itself might indicate multiple changes or moves
+          // It's safer to regenerate in this case.
+          // filename might be null for directory renames.
+          console.log(`Detected ${event} in ${PROMPTS_DIR}. Regenerating prompts...`);
+          await regenerateAllPromptsFile();
+        }
+      });
+
+      process.on('SIGINT', () => {
+        console.log('Stopping watcher...');
+        watcher.close();
+        process.exit(0);
+      });
+    } else {
+      console.log('Running in single-run mode (no --watch flag detected).');
+    }
   } catch (error) {
     console.error('Error regenerating prompts file:', error);
     try {
@@ -559,38 +601,7 @@ const __dirname = path.dirname(__filename);
 }
 
 async function main() {
-  await regenerateAllPromptsFile(); // Initial generation
-
-  console.log(
-    `Watching for changes in .md, .hbs, .handlebars files in ${PROMPTS_DIR} (excluding ${path.basename(OUTPUT_PROMPTS_FILE)})...`,
-  );
-
-  const watcher = chokidar.watch(path.join(PROMPTS_DIR, '**/*.{md,hbs,handlebars}'), {
-    ignored: [
-      /(^|[/\\])\../, // ignore dotfiles
-      OUTPUT_PROMPTS_FILE, // ignore the output file itself
-    ],
-    persistent: true,
-    ignoreInitial: true,
-  });
-
-  const handleChange = async (filePath: string) => {
-    if (path.resolve(filePath) === path.resolve(OUTPUT_PROMPTS_FILE)) return;
-    console.log(`File ${filePath} has been changed/added/removed`);
-    await regenerateAllPromptsFile();
-  };
-
-  watcher
-    .on('add', handleChange)
-    .on('change', handleChange)
-    .on('unlink', handleChange)
-    .on('error', error => console.error(`Watcher error: ${error}`));
-
-  process.on('SIGINT', () => {
-    console.log('Stopping watcher...');
-    watcher.close();
-    process.exit(0);
-  });
+  await regenerateAllPromptsFile();
 }
 
 main().catch(console.error);
