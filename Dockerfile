@@ -41,7 +41,7 @@ COPY --from=builder /app/package.json /app/bun.lock ./
 RUN bun install --production --no-optional
 
 # Copy the built application (dist directory) from the builder stage
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist ./
 
 # Create data directories
 RUN mkdir -p data repos
@@ -54,4 +54,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 # Start the application
-CMD ["bun", "dist/app.js"] 
+CMD ["bun", "app.js"] 
