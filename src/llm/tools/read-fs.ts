@@ -5,40 +5,115 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import fastGlob from 'fast-glob';
 
-const ignoreDirs = ['.git', 'node_modules', 'dist', 'build', 'coverage'];
+export type FileEntry = [string, number];
 
-/**
- * A tool for reading file contents
- */
+async function getFormattedFileEntry(
+  absoluteFilePath: string,
+  basePathForRelative?: string,
+): Promise<FileEntry> {
+  const name = basePathForRelative
+    ? path.relative(basePathForRelative, absoluteFilePath)
+    : path.basename(absoluteFilePath);
+
+  let lineCount = 0;
+  try {
+    const content = await fs.readFile(absoluteFilePath, 'utf-8');
+    lineCount = content.split('\n').length;
+  } catch (e) {
+    console.warn(`Could not read file ${absoluteFilePath} for line count: ${(e as Error).message}`);
+    // lineCount remains 0, which is the default
+  }
+  return [name, lineCount];
+}
+
+const defaultIgnoreDirs = ['.git', 'node_modules', 'dist', 'build', 'coverage'];
+const defaultIgnoreFiles = [
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb',
+  'bun.lock',
+];
+
+async function readGitignore(basePath: string): Promise<string[]> {
+  try {
+    const gitignorePath = path.join(basePath, '.gitignore');
+    const content = await fs.readFile(gitignorePath, 'utf-8');
+
+    // Parse the .gitignore file and extract directories
+    // Filter out comments, empty lines, and files (entries without trailing slash)
+    // Also remove the trailing slash if present
+    return content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(
+        line =>
+          line &&
+          !line.startsWith('#') &&
+          !line.includes('*') && // Skip patterns with wildcards for simplicity
+          !line.startsWith('!'), // Skip negated patterns
+      )
+      .map(line => (line.endsWith('/') ? line.slice(0, -1) : line));
+  } catch (error) {
+    // If .gitignore doesn't exist or can't be read, return an empty array
+    return [];
+  }
+}
+
+async function getIgnoreDirs(basePath: string, additionalDirs: string[] = []): Promise<string[]> {
+  const gitignoreDirs = await readGitignore(basePath);
+
+  // Merge all directories and remove duplicates
+  return [...new Set([...defaultIgnoreDirs, ...gitignoreDirs, ...additionalDirs])];
+}
+
+async function getIgnoreFiles(basePath: string, additionalFiles: string[] = []): Promise<string[]> {
+  const gitignoreFiles = await readGitignore(basePath);
+  return [...new Set([...defaultIgnoreFiles, ...gitignoreFiles, ...additionalFiles])];
+}
+
+function assertPathIsWithinBasePath(basePath: string, filePath: string): void {
+  const resolvedPath = path.resolve(filePath);
+  if (!resolvedPath.startsWith(basePath)) {
+    throw new Error('Access denied: Path is outside of base directory');
+  }
+}
+
+function errorToToolResult(error: unknown): { error: string } {
+  if (error instanceof Error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return {
+        error: `File not found: ${error.message}`,
+      };
+    }
+    return {
+      error: error.message,
+    };
+  }
+  return {
+    error: 'Unknown error',
+  };
+}
+
 export const readFileTool = wrapTool({
   name: 'readFile',
   description: 'Read the contents of a file',
   schema: z.object({
-    /**
-     * Path to the file, relative to the base path
-     */
     path: z.string().describe('Path to the file, relative to the repository root'),
-
-    /**
-     * Line number to start reading from (1-indexed, inclusive)
-     */
     startLine: z
       .number()
       .optional()
       .describe('Line number to start reading from (1-indexed, inclusive)'),
-
-    /**
-     * Line number to end reading at (1-indexed, inclusive)
-     */
     endLine: z.number().optional().describe('Line number to end reading at (1-indexed, inclusive)'),
   }),
   execute: async (params, _, context) => {
     if (!context) {
       throw new Error('Context is required');
     }
-
     try {
       const filePath = join(context.basePath, params.path);
+      assertPathIsWithinBasePath(context.basePath, filePath);
+
       const content = await fs.readFile(filePath, 'utf-8');
 
       if (params.startLine || params.endLine) {
@@ -59,35 +134,24 @@ export const readFileTool = wrapTool({
         totalLines: content.split('\n').length,
       };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return {
-          error: `File not found: ${params.path}`,
-        };
-      }
-      return {
-        error: `Error reading file: ${(error as Error).message}`,
-      };
+      return errorToToolResult(error);
     }
   },
   getReadableResult: result => {
     if ('error' in result && result.error) {
       return `Error: ${result.error}`;
-    } else {
-      return result.content?.slice(0, 50) + '...';
     }
+    if ('content' in result && typeof result.content === 'string') {
+      return result.content.slice(0, 50) + '...';
+    }
+    return 'Unable to display result content.';
   },
 });
 
-/**
- * A tool for checking if a file exists
- */
 export const fileExistsTool = wrapTool({
   name: 'fileExists',
   description: 'Check if a file exists',
   schema: z.object({
-    /**
-     * Path to the file, relative to the base path
-     */
     path: z.string().describe('Path to the file, relative to the repository root'),
   }),
   execute: async (params, _, context) => {
@@ -97,35 +161,35 @@ export const fileExistsTool = wrapTool({
 
     try {
       const filePath = join(context.basePath, params.path);
-      await fs.access(filePath);
+      assertPathIsWithinBasePath(context.basePath, filePath);
 
-      const stats = await fs.stat(filePath);
+      try {
+        await fs.access(filePath);
 
-      return {
-        exists: true,
-        isDirectory: stats.isDirectory(),
-        isFile: stats.isFile(),
-      };
+        const stats = await fs.stat(filePath);
+
+        return {
+          exists: true,
+          isDirectory: stats.isDirectory(),
+          isFile: stats.isFile(),
+        };
+      } catch (error) {
+        return {
+          exists: false,
+          isDirectory: false,
+          isFile: false,
+        };
+      }
     } catch (error) {
-      return {
-        exists: false,
-        isDirectory: false,
-        isFile: false,
-      };
+      return errorToToolResult(error);
     }
   },
 });
 
-/**
- * A tool for listing directory contents
- */
 export const listDirectoryTool = wrapTool({
   name: 'listDirectory',
-  description: 'List the contents of a directory',
+  description: 'List the contents of a directory. Files are returned as [name, lineCount] tuples.',
   schema: z.object({
-    /**
-     * Path to the directory, relative to the base path
-     */
     path: z.string().describe('Path to the directory, relative to the repository root'),
   }),
   execute: async (params, _, context) => {
@@ -135,17 +199,25 @@ export const listDirectoryTool = wrapTool({
 
     try {
       const dirPath = join(context.basePath, params.path);
+      assertPathIsWithinBasePath(context.basePath, dirPath);
+
+      const ignoreDirs = await getIgnoreDirs(context.basePath);
+      const ignoreFiles = await getIgnoreFiles(context.basePath);
 
       const entries = await fs.readdir(dirPath, { withFileTypes: true });
-      const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
-      const directories = entries.filter(entry => entry.isDirectory()).map(entry => entry.name);
+      const files = entries
+        .filter(entry => entry.isFile())
+        .map(entry => entry.name)
+        .filter(file => !ignoreFiles.includes(file));
+      const directories = entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name)
+        .filter(dir => !ignoreDirs.includes(dir));
 
       const fileDetails = await Promise.all(
         files.map(async file => {
           const filePath = join(dirPath, file);
-          const content = await fs.readFile(filePath, 'utf-8');
-          const lineCount = content.split('\n').length;
-          return { name: file, lineCount };
+          return getFormattedFileEntry(filePath);
         }),
       );
 
@@ -155,28 +227,15 @@ export const listDirectoryTool = wrapTool({
         directories,
       };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return {
-          error: `Directory not found: ${params.path}`,
-        };
-      }
-      return {
-        error: `Error listing directory: ${(error as Error).message}`,
-      };
+      return errorToToolResult(error);
     }
   },
 });
 
-/**
- * A tool for showing the file tree
- */
 export const showFileTreeTool = wrapTool({
   name: 'showFileTree',
-  description: 'Show the file tree of a directory',
+  description: `Show the file tree of a directory. Output is a compact JSON structure. Directories are represented as ["directoryName", [children...]], and files as ["fileName", lineCount].`,
   schema: z.object({
-    /**
-     * Path to the directory, relative to the base path
-     */
     path: z.string().describe('Path to the directory, relative to the repository root'),
   }),
   execute: async (params, _, context) => {
@@ -186,68 +245,68 @@ export const showFileTreeTool = wrapTool({
 
     try {
       const dirPath = join(context.basePath, params.path);
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      assertPathIsWithinBasePath(context.basePath, dirPath);
 
-      const tree = entries.map(entry => ({
-        name: entry.name,
-        isDirectory: entry.isDirectory(),
-      }));
+      const ignoreDirs = await getIgnoreDirs(context.basePath);
+      const ignoreFiles = await getIgnoreFiles(context.basePath);
+
+      async function buildCompactTree(currentPath: string, relativePath: string): Promise<any[]> {
+        const entries = await fs.readdir(currentPath, { withFileTypes: true });
+        type TreeEntry = [string, TreeEntry[]] | FileEntry;
+        const tree: TreeEntry[] = [];
+
+        for (const entry of entries) {
+          const entryRelativePath = join(relativePath, entry.name);
+          if (entry.isDirectory()) {
+            if (!ignoreDirs.includes(entry.name)) {
+              const fullPath = join(currentPath, entry.name);
+              const children = await buildCompactTree(fullPath, entryRelativePath);
+              tree.push([entry.name, children]);
+            }
+          } else {
+            if (!ignoreFiles.includes(entry.name)) {
+              const filePath = join(currentPath, entry.name);
+              tree.push(await getFormattedFileEntry(filePath));
+            }
+          }
+        }
+        return tree;
+      }
+
+      const tree = await buildCompactTree(dirPath, params.path === '.' ? '' : params.path); // Adjust relative path for root
 
       return {
         path: params.path,
-        tree,
+        tree, // The tree is now in a more compact [name, children_or_line_count] format
       };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return {
-          error: `Directory not found: ${params.path}`,
-        };
-      }
-      return {
-        error: `Error showing file tree: ${(error as Error).message}`,
-      };
+      return errorToToolResult(error);
     }
   },
 });
 
-/**
- * A tool for searching code with regular expressions
- */
 export const grepCodeTool = wrapTool({
   name: 'grepCode',
-  description: 'Search code with regular expressions',
+  description:
+    'Search code with regular expressions. Each result includes the matching line, its number, and the file information as a [filePath, totalLineCount] tuple.',
   schema: z.object({
-    /**
-     * Regular expression pattern to search for
-     */
-    pattern: z.string().describe('Regular expression pattern to search for'),
-
-    /**
-     * Paths or globs to search in, relative to the repository root. Each entry can be a directory path (for recursive search) or a direct file path. Directories are searched recursively applying extension filters. Files are searched directly, respecting extension filters.
-     */
+    pattern: z.string().min(1).describe('Regular expression pattern to search for'),
     paths: z
       .array(z.string())
       .optional()
       .describe(
         'Paths or globs to search in, relative to the repository root. Each entry can be a directory path (for recursive search) or a direct file path. Directories are searched recursively applying extension filters. Files are searched directly, respecting extension filters.',
       ),
-
-    /**
-     * File extensions to include (e.g., '.ts', '.js')
-     */
     extensions: z
       .array(z.string())
       .optional()
       .describe('File extensions to include (e.g., ".ts", ".js")'),
-
-    /**
-     * Maximum number of results to return
-     */
-    maxResults: z.number().optional().default(100).describe('Maximum number of results to return'),
-
-    /**
-     * Whether to use case-sensitive matching
-     */
+    maxResults: z
+      .number()
+      .max(100)
+      .optional()
+      .default(20)
+      .describe('Maximum number of results to return (default: 20, max: 100)'),
     caseSensitive: z
       .boolean()
       .optional()
@@ -261,8 +320,10 @@ export const grepCodeTool = wrapTool({
 
     try {
       const basePath = context.basePath;
+      const ignoreDirs = await getIgnoreDirs(context.basePath);
+      const ignoreFiles = await getIgnoreFiles(context.basePath);
 
-      const allResults: Array<{ filePath: string; lineNumber: number; content: string }> = [];
+      const allResults: Array<{ file: FileEntry; lineNumber: number; content: string }> = [];
       const regex = new RegExp(params.pattern, params.caseSensitive ? '' : 'i');
       const normalizedExtensions = params.extensions?.map(ext =>
         ext.startsWith('.') ? ext : `.${ext}`,
@@ -273,10 +334,9 @@ export const grepCodeTool = wrapTool({
         for (let i = 0; i < lines.length; i++) {
           if (allResults.length >= params.maxResults) break;
           if (regex.test(lines[i])) {
-            const relativePath = path.relative(basePath, filePath);
             allResults.push({
-              filePath: relativePath,
-              lineNumber: i + 1, // 1-indexed line numbers
+              file: await getFormattedFileEntry(filePath),
+              lineNumber: i + 1,
               content: lines[i],
             });
           }
@@ -314,7 +374,10 @@ export const grepCodeTool = wrapTool({
             const filesInDir = await fastGlob(globPatterns, {
               onlyFiles: true,
               cwd: searchDir,
-              ignore: ignoreDirs?.map(d => `**/${d}/**`),
+              ignore: [
+                ...(ignoreDirs ?? []).map(d => `**/${d}/**`),
+                ...(ignoreFiles ?? []).map(f => `**/${f}`),
+              ],
               dot: true, // Include hidden files if not in ignoreDirs
             });
 
@@ -342,6 +405,10 @@ export const grepCodeTool = wrapTool({
               continue; // Skip if extension doesn't match
             }
           }
+          // Check if the file itself is in the ignoreFiles list
+          if (ignoreFiles.includes(path.basename(filePath))) {
+            continue;
+          }
 
           if (allResults.length >= params.maxResults) break; // Check before reading the file
 
@@ -358,54 +425,31 @@ export const grepCodeTool = wrapTool({
       }
       return { results: allResults.slice(0, params.maxResults) }; // Ensure results are capped
     } catch (error) {
-      return {
-        results: [],
-        error: `Search failed: ${(error as Error).message}`,
-      };
+      return errorToToolResult(error);
     }
   },
 });
 
-/**
- * A tool for finding files by name/path pattern
- */
 export const findFilesTool = wrapTool({
   name: 'findFiles',
   description:
-    'Find files by name pattern. Supports glob patterns, regex, or simple text matching.',
+    'Find files by name pattern. Supports glob patterns, regex, or simple text matching. Returns a list of [filePath, lineCount] tuples.',
   schema: z.object({
-    /**
-     * Pattern to search for in file names. Can be:
-     * - A simple glob pattern (e.g., "*.ts", "test*")
-     * - A regular expression (e.g., "test.*\\.ts$")
-     * - A simple text pattern (e.g., "test")
-     */
     pattern: z
       .string()
+      .min(1)
       .describe(
         'Pattern to search for in file names. Can be a simple glob pattern, regex, or text pattern',
       ),
-
-    /**
-     * Directory to search in, relative to the repository root
-     */
     directory: z
       .string()
       .optional()
       .default('.')
       .describe('Directory to search in, relative to the repository root'),
-
-    /**
-     * File extensions to include (e.g., '.ts', '.js')
-     */
     extensions: z
       .array(z.string())
       .optional()
       .describe('File extensions to include (e.g., ".ts", ".js")'),
-
-    /**
-     * Maximum number of results to return
-     */
     maxResults: z.number().optional().default(20).describe('Maximum number of results to return'),
   }),
   execute: async (params, _, context) => {
@@ -415,9 +459,12 @@ export const findFilesTool = wrapTool({
 
     try {
       const basePath = context.basePath;
+      const ignoreDirs = await getIgnoreDirs(context.basePath);
+      const ignoreFiles = await getIgnoreFiles(context.basePath);
 
       // Prepare search directory
       const searchDir = path.join(basePath, params.directory);
+      assertPathIsWithinBasePath(basePath, searchDir);
 
       // Create glob patterns based on extensions
       const patterns: string[] = [];
@@ -435,7 +482,10 @@ export const findFilesTool = wrapTool({
       const allFiles = await fastGlob(patterns, {
         onlyFiles: true,
         cwd: searchDir,
-        ignore: ignoreDirs?.map(d => `**/${d}/**`),
+        ignore: [
+          ...(ignoreDirs ?? []).map(d => `**/${d}/**`),
+          ...(ignoreFiles ?? []).map(f => `**/${f}`),
+        ],
       });
 
       // Convert glob pattern to regex if needed
@@ -453,17 +503,24 @@ export const findFilesTool = wrapTool({
       }
 
       // Filter by pattern in filename
-      const files = allFiles
+      const matchedFilesRelativePaths = allFiles
         .filter(file => patternRegex.test(path.basename(file)))
+        .filter(file => !ignoreFiles.includes(path.basename(file)))
         .slice(0, params.maxResults)
-        .map(file => path.join(params.directory, file));
+        .map(file => path.join(params.directory, file)); // These are relative to basePath
 
-      return { files };
+      // Now, get the formatted entries with line counts
+      const filesWithLineCounts = await Promise.all(
+        matchedFilesRelativePaths.map(async relativeFilePath => {
+          const absoluteFilePath = path.join(basePath, relativeFilePath);
+          // We want the relative path in the output, so pass basePath as the second argument to the helper.
+          return getFormattedFileEntry(absoluteFilePath, basePath);
+        }),
+      );
+
+      return { files: filesWithLineCounts };
     } catch (error) {
-      return {
-        files: [],
-        error: `Find failed: ${(error as Error).message}`,
-      };
+      return errorToToolResult(error);
     }
   },
 });

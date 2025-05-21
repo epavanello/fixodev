@@ -91,6 +91,7 @@ export const processCodeModificationRequest = async <PARAMS extends ToolParamete
   botConfig: BotConfig,
   conversationalLogging: boolean = false,
   outputTool?: WrappedTool<PARAMS, OUTPUT> | undefined,
+  agentOptionOverrides?: Partial<AgentOptions>,
 ): Promise<OUTPUT | undefined> => {
   try {
     const context: CodeContext = {
@@ -101,7 +102,12 @@ export const processCodeModificationRequest = async <PARAMS extends ToolParamete
       maxIterations: 50,
     };
 
-    const agent = await createSourceModifierAgent(context, repositoryPath, outputTool);
+    const agent = await createSourceModifierAgent(
+      context,
+      repositoryPath,
+      outputTool,
+      agentOptionOverrides,
+    );
 
     const result = await agent.run(modificationRequest, {
       toolChoice: 'required',

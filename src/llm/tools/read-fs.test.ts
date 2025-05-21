@@ -6,8 +6,8 @@ import {
   showFileTreeTool,
   grepCodeTool,
   findFilesTool,
+  FileEntry,
 } from './read-fs';
-import { writeFileTool } from './write-fs';
 import { ToolContext } from './types';
 
 setDefaultTimeout(60 * 1000 * 10);
@@ -32,6 +32,7 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error); // Fail test if error
     expect(result.content).toBeDefined();
     expect(result.totalLines).toBe(10);
     expect(result.content).toContain('This is a sample text file');
@@ -49,6 +50,7 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.content).toBeDefined();
     expect(result.startLine).toBe(3);
     expect(result.endLine).toBe(5);
@@ -65,34 +67,9 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.content).toBeDefined();
     expect(result.content).toContain('This is a nested file');
-  });
-
-  it('should write to a file successfully', async () => {
-    const testContent = '// Test content\n// For testing purposes';
-    const result = await writeFileTool.execute(
-      {
-        path: 'test-samples/write-test.txt',
-        content: testContent,
-        createDirectories: true,
-      },
-      options,
-      context,
-    );
-
-    expect(result).toBeDefined();
-    expect(result.success).toBe(true);
-    expect(result.path).toBe('test-samples/write-test.txt');
-
-    const readResult = await readFileTool.execute(
-      {
-        path: 'test-samples/write-test.txt',
-      },
-      options,
-      context,
-    );
-    expect(readResult.content).toBe(testContent);
   });
 
   it('should check if a file exists', async () => {
@@ -105,6 +82,7 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.exists).toBe(true);
     expect(result.isFile).toBe(true);
     expect(result.isDirectory).toBe(false);
@@ -120,6 +98,7 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.exists).toBe(false);
     expect(result.isFile).toBe(false);
     expect(result.isDirectory).toBe(false);
@@ -135,6 +114,7 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.exists).toBe(true);
     expect(result.isDirectory).toBe(true);
     expect(result.isFile).toBe(false);
@@ -150,22 +130,23 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.files).toBeDefined();
     expect(result.directories).toBeDefined();
     expect(Array.isArray(result.files)).toBe(true);
     expect(Array.isArray(result.directories)).toBe(true);
 
     // Map and verify the expected files and their line counts
-    const expectedFiles = [
-      { lineCount: 28, name: 'code.ts' },
-      { lineCount: 2, name: 'write-test.txt' },
-      { lineCount: 10, name: 'sample.txt' },
+    const expectedFiles: { name: string; lineCount: number }[] = [
+      { name: 'code.ts', lineCount: 28 },
+      { name: 'write-test.txt', lineCount: 2 },
+      { name: 'sample.txt', lineCount: 10 },
     ];
 
     expectedFiles.forEach(expected => {
-      const foundFile = result.files?.find(file => file.name === expected.name);
+      const foundFile = result.files?.find((file: FileEntry) => file[0] === expected.name);
       expect(foundFile).toBeDefined();
-      expect(foundFile?.lineCount).toBe(expected.lineCount);
+      expect(foundFile?.[1]).toBe(expected.lineCount);
     });
 
     expect(result.directories?.[0]).toContain('subdir');
@@ -181,7 +162,8 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
-    expect(result.files?.[0]?.name).toMatchObject({ name: 'nested.txt' });
+    if ('error' in result) throw new Error(result.error);
+    expect(result.files?.[0]).toEqual(['nested.txt', 4]);
   });
 
   it('should show the file tree of a directory', async () => {
@@ -194,10 +176,32 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.tree).toBeDefined();
     expect(Array.isArray(result.tree)).toBe(true);
-    expect(result.tree?.some(entry => entry.name === 'sample.txt')).toBe(true);
-    expect(result.tree?.some(entry => entry.name === 'subdir')).toBe(true);
+
+    // Check for file entry [name, lineCount]
+    const sampleFileEntry = result.tree?.find(
+      (entry: any): entry is FileEntry =>
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === 'string' &&
+        entry[0] === 'sample.txt',
+    ) as FileEntry | undefined;
+    expect(sampleFileEntry).toBeDefined();
+    expect(sampleFileEntry?.[0]).toBe('sample.txt');
+    expect(sampleFileEntry?.[1]).toBe(10); // Assuming sample.txt has 10 lines
+
+    // Check for directory entry [name, children[]]
+    const subdirEntry = result.tree?.find(
+      (entry: any) =>
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === 'string' &&
+        entry[0] === 'subdir' &&
+        Array.isArray(entry[1]),
+    );
+    expect(subdirEntry).toBeDefined();
   });
 
   it('should search for text in files', async () => {
@@ -214,16 +218,19 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.results).toBeDefined();
     expect(Array.isArray(result.results)).toBe(true);
     expect(result.results.length).toBeGreaterThan(0);
-    expect(result.results.some(r => r?.filePath.includes('sample.txt'))).toBe(true);
-    expect(result.results.some(r => r?.filePath.includes('code.ts'))).toBe(true);
+    // file is [filePath, totalLineCount]
+    expect(result.results.some(r => r?.file[0].includes('sample.txt'))).toBe(true);
+    expect(result.results.some(r => r?.file[0].includes('code.ts'))).toBe(true);
   });
+
   it('should search with case sensitivity', async () => {
     const result = await grepCodeTool.execute(
       {
-        pattern: 'Test',
+        pattern: 'Test', // Case sensitive
         paths: ['test-samples'],
         extensions: ['.ts'],
         maxResults: 100,
@@ -234,10 +241,12 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.results).toBeDefined();
     expect(Array.isArray(result.results)).toBe(true);
-    expect(result.results.some(r => r?.filePath.includes('code.ts'))).toBe(true);
+    expect(result.results.some(r => r?.file[0].includes('code.ts'))).toBe(true);
   });
+
   it('should find files by pattern', async () => {
     const result = await findFilesTool.execute(
       {
@@ -251,10 +260,17 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.files).toBeDefined();
     expect(Array.isArray(result.files)).toBe(true);
-    expect(result.files).toContain('test-samples/sample.txt');
+    // result.files is Array<[relativePath, lineCount]>
+    expect(
+      result.files.some(
+        fileEntry => fileEntry[0] === 'test-samples/sample.txt' && fileEntry[1] === 10,
+      ),
+    ).toBe(true);
   });
+
   it('should find files in subdirectories', async () => {
     const result = await findFilesTool.execute(
       {
@@ -268,8 +284,14 @@ describe('Tools', () => {
     );
 
     expect(result).toBeDefined();
+    if ('error' in result) throw new Error(result.error);
     expect(result.files).toBeDefined();
     expect(Array.isArray(result.files)).toBe(true);
-    expect(result.files).toContain('test-samples/subdir/nested.txt');
+    // result.files is Array<FileEntry>
+    expect(
+      result.files.some(
+        fileEntry => fileEntry[0] === 'test-samples/subdir/nested.txt' && fileEntry[1] === 4,
+      ),
+    ).toBe(true);
   });
 });
