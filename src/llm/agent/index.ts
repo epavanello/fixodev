@@ -164,10 +164,9 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
             if (this.outputTool && toolName === this.outputTool.name) {
               needMoreProcessing = false;
               output = toolResult.result;
-            } else {
-              // // Add tool result to context
-              this.context.addToolResultMessage(toolResult);
             }
+            // // Add tool result to context
+            this.context.addToolResultMessage(toolResult);
           }
         };
 
