@@ -3,10 +3,11 @@ import { ToolRegistry } from '../tools/registry';
 import { MemoryStore } from './memory';
 import { logger } from '../../config/logger';
 import { ToolParameters, WrappedTool } from '../tools/types';
-import { coderModel } from '../models';
+import { formatCost, coderModel, ModelConfig, calculateCostInMillionths } from '../models';
 import { askUserTool } from '../tools/interactive';
-import { CoreMessage, generateText, LanguageModelV1, StepResult } from 'ai';
+import { CoreMessage, generateText, StepResult } from 'ai';
 import { z } from 'zod';
+import { formatDataForLogging } from '@/utils/json';
 
 /**
  * Options for creating an agent
@@ -20,7 +21,7 @@ export interface AgentOptions {
   /**
    * The model to use
    */
-  model?: LanguageModelV1;
+  modelConfig?: ModelConfig;
 
   /**
    * The system message to use
@@ -78,7 +79,7 @@ export interface AgentStep {
  */
 export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
   private context: AgentContext;
-  private model: LanguageModelV1;
+  private modelConfig: ModelConfig;
   private basePath: string;
   private steps: AgentStep[] = [];
   private maxIterations: number;
@@ -87,7 +88,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
 
   constructor(options: AgentOptions) {
     this.basePath = options.basePath;
-    this.model = options.model || coderModel;
+    this.modelConfig = options.modelConfig || coderModel;
     this.maxIterations = options.maxIterations || 5;
     this.conversationalLogging = options.conversationalLogging || false;
     this.outputTool = options.outputTool;
@@ -140,6 +141,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
       }
 
       const tools = registryTools.getUnwrappedTools();
+      let totalCostInMillionths = 0;
 
       logger.debug({ tools }, 'Tools');
       while (needMoreProcessing && currentIteration < this.maxIterations) {
@@ -177,11 +179,10 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
 
             logger.info(
               `${tool.name}(${
-                tool.getReadableParams?.(toolResult.args) ||
-                JSON.stringify(toolResult.args, null, 2)
+                tool.getReadableParams?.(toolResult.args) || formatDataForLogging(toolResult.args)
               }) => ${
                 tool.getReadableResult?.(toolResult.result) ||
-                JSON.stringify(toolResult.result, null, 2)
+                formatDataForLogging(toolResult.result)
               }`,
             );
           }
@@ -189,7 +190,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
 
         // Send the request to OpenAI
         const response = await generateText<any>({
-          model: this.model,
+          model: this.modelConfig.model,
           messages,
           tools,
           toolChoice: toolChoice,
@@ -198,6 +199,20 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
           //   processToolResults(step.toolResults);
           // },
         });
+
+        totalCostInMillionths += calculateCostInMillionths(
+          this.modelConfig,
+          response.usage.promptTokens,
+          response.usage.completionTokens,
+        );
+
+        logger.info(
+          {
+            cost: formatCost(totalCostInMillionths),
+            contextPercentage: `${((response.usage.totalTokens / this.modelConfig.contextWindow) * 100).toFixed(2)}%`,
+          },
+          'Agent cost',
+        );
 
         // Extract the response content and tool calls
         const responseMessage = response.text;

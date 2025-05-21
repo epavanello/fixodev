@@ -1,4 +1,4 @@
-import { ToolExecutionOptions } from 'ai';
+import { CoreToolMessage, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 
 export type ToolParameters = z.ZodTypeAny | z.Schema<any>;
@@ -21,14 +21,19 @@ export function wrapTool<PARAMS extends ToolParameters = any, OUTPUT = any>(conf
   ) => Promise<OUTPUT>;
   getReadableParams?: (params: z.infer<PARAMS>) => string;
   getReadableResult?: (result: OUTPUT) => string;
+  transformToolResponse?: (
+    original: CoreToolMessage,
+    info: { toolCallsCount: number },
+  ) => CoreToolMessage;
 }) {
   return {
     name: config.name,
     execute: config.execute,
     description: config.description,
     parameters: config.schema,
-    getReadableParams: config.getReadableParams || (params => JSON.stringify(params)),
-    getReadableResult: config.getReadableResult || (result => JSON.stringify(result)),
+    getReadableParams: config.getReadableParams,
+    getReadableResult: config.getReadableResult,
+    transformToolResponse: config.transformToolResponse,
   };
 }
 

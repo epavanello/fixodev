@@ -52,14 +52,4 @@ export const writeFileTool = wrapTool({
       };
     }
   },
-  getReadableParams: ({ content, ...params }) => {
-    return JSON.stringify(
-      {
-        ...params,
-        content: content.slice(0, 50) + '...',
-      },
-      null,
-      2,
-    );
-  },
 });

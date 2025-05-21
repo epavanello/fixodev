@@ -2,8 +2,8 @@ import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { RepoAgent, AgentOptions } from './agent';
 import { BotConfig } from '../types/config';
-import { CoreMessage, LanguageModelV1 } from 'ai';
-import { coderModel } from './models';
+import { CoreMessage } from 'ai';
+import { coderModel, ModelConfig } from './models';
 import { ToolParameters, WrappedTool } from './tools/types';
 import { readonlyTools, reasoningTools, writableTools } from './tools';
 import { generateSystemPrompt } from './prompts/prompts';
@@ -20,7 +20,7 @@ export interface CodeContext {
   command?: string;
   conversationalLogging?: boolean;
   history?: CoreMessage[];
-  model?: LanguageModelV1;
+  modelConfig?: ModelConfig;
   maxIterations?: number;
   botConfig?: BotConfig;
 }
@@ -33,7 +33,7 @@ const getBaseAgentConfig = (
   repositoryPath?: string,
 ): Omit<AgentOptions, 'systemMessage'> => ({
   basePath: repositoryPath || '.',
-  model: context.model || coderModel,
+  modelConfig: context.modelConfig || coderModel,
   maxIterations: context.maxIterations || 25,
   conversationalLogging: context.conversationalLogging,
   history: context.history,
@@ -56,6 +56,8 @@ export const createSourceModifierAgent = async <PARAMS extends ToolParameters, O
   ];
 
   const defaultSystemMessage = await generateSystemPrompt({
+    maxLines: '200',
+    maxReadFileCalls: '10',
     toolsAvailable: toolsAvailable.map(tool => ({
       name: tool.name,
       description: tool.description,

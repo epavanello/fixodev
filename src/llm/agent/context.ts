@@ -152,8 +152,27 @@ export class AgentContext {
    * filtering to respect token limits
    */
   getPromptMessages(): CoreMessage[] {
-    // This is a simplified version; in a real implementation,
-    // you would need to count tokens and truncate history
+    // filter out specific tools with custom history rules
+    const toolsCallsCount = new Map<string, number>();
+    this.messages = this.messages
+      .reverse()
+      .map(msg => {
+        if (msg.role === 'tool') {
+          const toolName = msg.content[0].toolName;
+          const tool = this.toolRegistry.get(toolName);
+
+          if (tool && tool.transformToolResponse) {
+            const toolCallCount = toolsCallsCount.get(toolName) ?? 0;
+            toolsCallsCount.set(toolName, toolCallCount + 1);
+            return tool.transformToolResponse(msg, {
+              toolCallsCount: toolCallCount,
+            });
+          }
+        }
+        return msg;
+      })
+      .reverse();
+
     return this.messages;
   }
 }

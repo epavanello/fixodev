@@ -19,6 +19,8 @@ export type SystemArgs = {
   readonly completionToolName?: string;
   readonly findFilesTool: string;
   readonly listDirectoryTool: string;
+  readonly maxLines: string;
+  readonly maxReadFileCalls: string;
   readonly readFileTool: string;
   readonly thinkTool: string;
   readonly toolsAvailable?: Array<{

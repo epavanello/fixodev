@@ -479,25 +479,4 @@ describe('Tools', () => {
       expect(file[0].endsWith('.ts')).toBe(true);
     });
   });
-
-  it('should provide readable results for readFileTool', () => {
-    const readableResult = readFileTool.getReadableResult({
-      content: 'This is a test content that should be truncated in the readable result',
-      totalLines: 1,
-    });
-
-    expect(readableResult).toBeDefined();
-    expect(readableResult.length).toBeLessThan(60); // Should be truncated
-    expect(readableResult).toContain('...');
-  });
-
-  it('should provide error message in readable results', () => {
-    const readableResult = readFileTool.getReadableResult({
-      error: 'Test error message',
-    });
-
-    expect(readableResult).toBeDefined();
-    expect(readableResult).toContain('Error:');
-    expect(readableResult).toContain('Test error message');
-  });
 });

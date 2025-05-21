@@ -21,4 +21,7 @@ export const taskCompletionTool = wrapTool({
       reasonOrOutput: params.reasonOrOutput,
     };
   },
+  getReadableResult: result => {
+    return result.reasonOrOutput;
+  },
 });

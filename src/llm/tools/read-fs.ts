@@ -137,14 +137,21 @@ export const readFileTool = wrapTool({
       return errorToToolResult(error);
     }
   },
-  getReadableResult: result => {
-    if ('error' in result && result.error) {
-      return `Error: ${result.error}`;
+  transformToolResponse: (original, info) => {
+    if (info.toolCallsCount > 10) {
+      return {
+        role: 'tool',
+        content: [
+          {
+            ...original.content[0],
+            result: {
+              omitted: 'Result was filtered out due to excessive history.',
+            },
+          },
+        ],
+      };
     }
-    if ('content' in result && typeof result.content === 'string') {
-      return result.content.slice(0, 50) + '...';
-    }
-    return 'Unable to display result content.';
+    return original;
   },
 });
 
