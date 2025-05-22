@@ -18,6 +18,27 @@ const modelConfigArray = [
     outputCostPerToken: 15,
   },
   {
+    id: 'google/gemini-2.5-pro-preview',
+    name: 'Gemini 2.5 Pro',
+    contextWindow: 1_048_576,
+    inputCostPerToken: 1.25,
+    outputCostPerToken: 10,
+  },
+  {
+    id: 'google/gemini-2.5-flash-preview',
+    name: 'Gemini 2.5 Flash',
+    contextWindow: 1_048_576,
+    inputCostPerToken: 0.15,
+    outputCostPerToken: 0.6,
+  },
+  {
+    id: 'google/gemini-2.5-flash-preview-05-20',
+    name: 'Gemini 2.5 Flash 05-20',
+    contextWindow: 1_048_576,
+    inputCostPerToken: 0.15,
+    outputCostPerToken: 0.6,
+  },
+  {
     id: 'openai/gpt-4o-mini',
     name: 'GPT-4o Mini',
     contextWindow: 128_000,
@@ -68,4 +89,4 @@ export function getModelConfig(modelId: ModelConfigId): ModelConfig {
 }
 
 // Initialize chat model
-export const coderModel: ModelConfig = getModelConfig('openai/gpt-4o-mini');
+export const coderModel: ModelConfig = getModelConfig('google/gemini-2.5-flash-preview-05-20');

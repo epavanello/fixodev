@@ -8,7 +8,7 @@ import { wrapTool } from './types';
  */
 export const writeFileTool = wrapTool({
   name: 'writeFile',
-  description: 'Write content to a file',
+  description: 'Write content to a file. Requires a reason for calling.',
   schema: z.object({
     /**
      * Path to the file, relative to the base path
@@ -27,6 +27,11 @@ export const writeFileTool = wrapTool({
       .boolean()
       .default(true)
       .describe("Whether to create parent directories if they don't exist"),
+    reasonForCall: z
+      .string()
+      .describe(
+        'Reason for calling this tool, explaining its purpose in the current context and how it contributes to the overall plan.',
+      ),
   }),
   execute: async (params, _, context) => {
     if (!context) {

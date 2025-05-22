@@ -147,7 +147,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
       const showFileTreeToolResult = await (
         registryTools.get(showFileTreeTool.name) as typeof showFileTreeTool
       ).execute(
-        { path: '' },
+        { path: '', reasonForCall: 'Show the repository file tree' },
         { messages: [], toolCallId: showFileTreeTool.name },
         {
           basePath: this.basePath,

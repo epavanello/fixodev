@@ -6,9 +6,9 @@ import {
   showFileTreeTool,
   grepCodeTool,
   // findFileNamesTool,
-  FileEntry,
 } from './read-fs';
 import { ToolContext } from './types';
+import { FileEntry } from './helpers';
 
 setDefaultTimeout(60 * 1000 * 10);
 
@@ -26,6 +26,7 @@ describe('Tools', () => {
     const result = await readFileTool.execute(
       {
         path: 'test-samples/sample.txt',
+        reasonForCall: 'Show the contents of the sample.txt file',
       },
       options,
       context,
@@ -44,6 +45,7 @@ describe('Tools', () => {
         path: 'test-samples/sample.txt',
         startLine: 3,
         endLine: 5,
+        reasonForCall: 'Show the contents of the sample.txt file, lines 3-5',
       },
       options,
       context,
@@ -61,6 +63,7 @@ describe('Tools', () => {
     const result = await readFileTool.execute(
       {
         path: 'test-samples/subdir/nested.txt',
+        reasonForCall: 'Show the contents of the nested.txt file',
       },
       options,
       context,
@@ -76,6 +79,7 @@ describe('Tools', () => {
     const result = await fileExistsTool.execute(
       {
         path: 'test-samples/sample.txt',
+        reasonForCall: 'Check if the sample.txt file exists',
       },
       options,
       context,
@@ -92,6 +96,7 @@ describe('Tools', () => {
     const result = await fileExistsTool.execute(
       {
         path: 'test-samples/non-existent-file.txt',
+        reasonForCall: 'Check if the non-existent-file.txt file exists',
       },
       options,
       context,
@@ -108,6 +113,7 @@ describe('Tools', () => {
     const result = await fileExistsTool.execute(
       {
         path: 'test-samples/subdir',
+        reasonForCall: 'Check if the subdir directory exists',
       },
       options,
       context,
@@ -124,6 +130,7 @@ describe('Tools', () => {
     const result = await listDirectoryTool.execute(
       {
         path: 'test-samples',
+        reasonForCall: 'List the contents of the test-samples directory',
       },
       options,
       context,
@@ -156,6 +163,7 @@ describe('Tools', () => {
     const result = await listDirectoryTool.execute(
       {
         path: 'test-samples/subdir',
+        reasonForCall: 'List the contents of the subdir directory',
       },
       options,
       context,
@@ -170,6 +178,7 @@ describe('Tools', () => {
     const result = await showFileTreeTool.execute(
       {
         path: 'test-samples',
+        reasonForCall: 'Show the file tree of the test-samples directory',
       },
       options,
       context,
@@ -212,6 +221,7 @@ describe('Tools', () => {
         extensions: ['.txt', '.ts'],
         maxResults: 100,
         caseSensitive: false,
+        reasonForCall: 'Search for the word "test" in the test-samples directory',
       },
       options,
       context,
@@ -235,6 +245,7 @@ describe('Tools', () => {
         extensions: ['.ts'],
         maxResults: 100,
         caseSensitive: true,
+        reasonForCall: 'Search for the word "Test" in the test-samples directory, case sensitive',
       },
       options,
       context,
@@ -301,6 +312,7 @@ describe('Tools', () => {
     const result = await readFileTool.execute(
       {
         path: 'test-samples/empty.txt',
+        reasonForCall: 'Show the contents of the empty.txt file',
       },
       options,
       context,
@@ -319,6 +331,7 @@ describe('Tools', () => {
         path: 'test-samples/sample.txt',
         startLine: 1,
         endLine: 1,
+        reasonForCall: 'Show the first line of the sample.txt file',
       },
       options,
       context,
@@ -336,6 +349,7 @@ describe('Tools', () => {
         path: 'test-samples/sample.txt',
         startLine: 10,
         endLine: 10,
+        reasonForCall: 'Show the contents of the sample.txt file, line 10',
       },
       options,
       context,
@@ -354,6 +368,7 @@ describe('Tools', () => {
         path: 'test-samples/sample.txt',
         startLine: 100, // Beyond file length
         endLine: 200,
+        reasonForCall: 'Show the contents of the sample.txt file, lines 100-200',
       },
       options,
       context,
@@ -369,6 +384,7 @@ describe('Tools', () => {
       {
         path: 'test-samples/sample.txt',
         startLine: -5, // Invalid, should be treated as 1
+        reasonForCall: 'Show the contents of the sample.txt file, lines -5 to 1',
       },
       options,
       context,
@@ -385,6 +401,7 @@ describe('Tools', () => {
     const result = await readFileTool.execute(
       {
         path: 'test-samples/does-not-exist.txt',
+        reasonForCall: 'Show the contents of the does-not-exist.txt file',
       },
       options,
       context,
@@ -402,6 +419,7 @@ describe('Tools', () => {
     const result = await readFileTool.execute(
       {
         path: '../../../etc/passwd', // Path traversal attempt
+        reasonForCall: 'Show the contents of the etc/passwd file',
       },
       options,
       context,
@@ -422,6 +440,7 @@ describe('Tools', () => {
         paths: ['test-samples'],
         maxResults: 3,
         caseSensitive: false,
+        reasonForCall: 'Search for the word "a" in the test-samples directory, max 3 results',
       },
       options,
       context,
@@ -442,6 +461,7 @@ describe('Tools', () => {
         paths: ['test-samples'],
         maxResults: 10,
         caseSensitive: false,
+        reasonForCall: 'Search for the word "test" in the test-samples directory, max 10 results',
       },
       options,
       context,

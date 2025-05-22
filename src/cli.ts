@@ -38,7 +38,6 @@ async function main() {
         );
 
         if (!result?.objectiveAchieved) {
-          // This might happen if maxIterations is reached before the output tool is called
           console.warn(`\n⚠️ Agent finished, reason: ${result?.reasonOrOutput}.`);
         }
       } catch (error) {
