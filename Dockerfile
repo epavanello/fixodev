@@ -34,7 +34,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package.json and bun.lockb from the builder stage
-COPY --from=builder /app/package.json /app/bun.lock /app/drizzle.config.ts ./
+COPY --from=builder /app/package.json /app/bun.lock /app/drizzle.config.ts /app/src/db/schema.ts ./
 
 # Install only production dependencies using the locked versions
 RUN bun install --production --no-optional
