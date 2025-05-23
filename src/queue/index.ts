@@ -36,7 +36,13 @@ class JobQueue {
       logs: [],
     };
 
-    return (await db.insert(jobsTable).values(newJob).returning())[0];
+    const result = (await db.insert(jobsTable).values(newJob).returning())[0];
+
+    if (!this.isProcessing) {
+      this.processNextJob();
+    }
+
+    return result;
   }
 
   /**
