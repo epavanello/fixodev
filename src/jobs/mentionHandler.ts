@@ -91,7 +91,6 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     {
       triggeredByCheck: {
         allowed: triggeredByCheck.allowed,
-        planType: triggeredByCheck.planType,
         usage: triggeredByCheck.usage,
         reason: triggeredByCheck.reason,
       },
@@ -158,7 +157,6 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
       repoOwner: originalRepoOwner,
       repoName: originalRepoName,
       jobType: job.type,
-      planType: triggeredByCheck.planType, // Use the plan type of the person who triggered
     });
 
     const cloneResult = await cloneRepository(repositoryToCloneUrl, undefined, cloneToken);
