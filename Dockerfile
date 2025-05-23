@@ -18,8 +18,6 @@ COPY build.ts ./
 COPY tsconfig.json ./
 COPY drizzle.config.ts ./
 
-RUN bun run db:migrate
-
 # Run the build script (defined in package.json)
 # This will create the /app/dist directory
 RUN bun run build --sourcemap
@@ -48,7 +46,9 @@ RUN bun install --production --no-optional
 COPY --from=builder /app/dist ./
 
 COPY drizzle.config.ts ./
-COPY src/db/schema.ts ./
+COPY src/db/schema.ts ./src/db/schema.ts
+
+RUN bun run db:migrate
 
 # Expose the application port
 EXPOSE 3000
