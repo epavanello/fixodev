@@ -12,6 +12,8 @@ import { envConfig } from '../config/env';
 import { ensureForkExists, ForkResult } from '../git/fork';
 import { processCodeModificationRequest } from '@/llm/processor';
 import { taskCompletionTool } from '@/llm/tools/task';
+import { RateLimitManager } from '../utils/rateLimit';
+import { db } from '../db';
 
 const handlerLogger = rootLogger.child({ context: 'MentionOnIssueJobHandler' });
 
@@ -35,6 +37,9 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
   });
 
   logger.info('Starting MentionOnIssueJob handling.');
+
+  // Initialize rate limit manager
+  const rateLimitManager = new RateLimitManager(db);
 
   let octokit: Octokit;
   let repoPath: string | undefined;
@@ -78,6 +83,62 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     throw new JobError(`Unknown job type for job ID ${jobId}`);
   }
 
+  // Check rate limits for both triggeredBy and repoOwner
+  const triggeredByCheck = await rateLimitManager.checkRateLimit(triggeredBy, 'triggeredBy');
+  const repoOwnerCheck = await rateLimitManager.checkRateLimit(originalRepoOwner, 'repoOwner');
+
+  logger.info(
+    {
+      triggeredByCheck: {
+        allowed: triggeredByCheck.allowed,
+        planType: triggeredByCheck.planType,
+        usage: triggeredByCheck.usage,
+        reason: triggeredByCheck.reason,
+      },
+      repoOwnerCheck: {
+        allowed: repoOwnerCheck.allowed,
+        planType: repoOwnerCheck.planType,
+        usage: repoOwnerCheck.usage,
+        reason: repoOwnerCheck.reason,
+      },
+    },
+    'Rate limit check results',
+  );
+
+  // If either user has exceeded their limits, post a rate limit message and exit
+  if (!triggeredByCheck.allowed || !repoOwnerCheck.allowed) {
+    const limitExceededUser = !triggeredByCheck.allowed ? triggeredBy : originalRepoOwner;
+    const limitExceededCheck = !triggeredByCheck.allowed ? triggeredByCheck : repoOwnerCheck;
+    const limitExceededUserType = !triggeredByCheck.allowed ? 'triggeredBy' : 'repoOwner';
+
+    const rateLimitMessage = rateLimitManager.generateRateLimitMessage(
+      triggeredBy,
+      limitExceededCheck,
+      limitExceededUserType,
+    );
+
+    try {
+      await octokit.issues.createComment({
+        owner: originalRepoOwner,
+        repo: originalRepoName,
+        issue_number: eventIssueNumber,
+        body: rateLimitMessage,
+      });
+      logger.info(
+        {
+          limitExceededUser,
+          limitExceededUserType,
+          reason: limitExceededCheck.reason,
+        },
+        'Posted rate limit exceeded message',
+      );
+    } catch (commentError) {
+      logger.error({ commentError }, 'Failed to post rate limit message');
+    }
+
+    return; // Exit early due to rate limit
+  }
+
   let initialCommentId: number | undefined;
 
   try {
@@ -89,6 +150,16 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     });
     initialCommentId = initialComment.data.id;
     logger.info('Posted acknowledgment comment.');
+
+    // Record the execution for rate limiting
+    await rateLimitManager.recordExecution({
+      jobId,
+      triggeredBy,
+      repoOwner: originalRepoOwner,
+      repoName: originalRepoName,
+      jobType: job.type,
+      planType: triggeredByCheck.planType, // Use the plan type of the person who triggered
+    });
 
     const cloneResult = await cloneRepository(repositoryToCloneUrl, undefined, cloneToken);
     repoPath = cloneResult.path;

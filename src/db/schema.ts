@@ -21,5 +21,36 @@ export const jobsTable = sqliteTable(
   table => [uniqueIndex('status_idx').on(table.status)],
 );
 
+export const userPlansTable = sqliteTable('user_plans', {
+  userId: text('user_id').primaryKey(),
+  planType: text('plan_type', { enum: ['free', 'paid'] })
+    .notNull()
+    .default('free'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export const jobExecutionsTable = sqliteTable(
+  'job_executions',
+  {
+    id: text('id').primaryKey(),
+    jobId: text('job_id').notNull(),
+    triggeredBy: text('triggered_by').notNull(),
+    repoOwner: text('repo_owner').notNull(),
+    repoName: text('repo_name').notNull(),
+    jobType: text('job_type').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  table => [
+    uniqueIndex('triggered_by_idx').on(table.triggeredBy),
+    uniqueIndex('repo_owner_idx').on(table.repoOwner),
+    uniqueIndex('created_at_idx').on(table.createdAt),
+  ],
+);
+
 export type JobInsert = typeof jobsTable.$inferInsert;
 export type JobSelect = typeof jobsTable.$inferSelect;
+export type UserPlanInsert = typeof userPlansTable.$inferInsert;
+export type UserPlanSelect = typeof userPlansTable.$inferSelect;
+export type JobExecutionInsert = typeof jobExecutionsTable.$inferInsert;
+export type JobExecutionSelect = typeof jobExecutionsTable.$inferSelect;

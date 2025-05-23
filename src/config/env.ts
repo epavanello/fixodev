@@ -40,6 +40,9 @@ const envSchema = z.object({
     .transform(val => val === 'true')
     .default('true'),
 
+  // Contact
+  CONTACT_EMAIL: z.string().default('sales@reposister.ai'),
+
   // Docker
   DOCKER_RUNTIME_PREFIX: z.string().optional(),
   BOT_USER_PAT: z.string().optional(),
