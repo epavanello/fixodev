@@ -48,7 +48,9 @@ COPY --from=builder /app/dist ./
 COPY drizzle.config.ts ./
 COPY src/db/schema.ts ./src/db/schema.ts
 
-RUN bun run db:migrate
+# Copy the entrypoint script
+COPY entrypoint.sh .
+RUN chmod +x ./entrypoint.sh
 
 # Expose the application port
 EXPOSE 3000
@@ -58,5 +60,8 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
-# Start the application
+# Set the entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+
+# Start the application (this will be passed to entrypoint.sh)
 CMD ["bun", "app.js"] 
