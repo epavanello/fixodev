@@ -48,6 +48,7 @@ RUN bun install --production --no-optional
 COPY --from=builder /app/dist ./
 
 COPY drizzle.config.ts ./
+COPY src/db/schema.ts ./
 
 # Expose the application port
 EXPOSE 3000
