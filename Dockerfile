@@ -9,12 +9,11 @@ COPY package.json ./
 RUN bun install
 
 # Copy source code required for the build
-# build.ts uses src/ and prompts/
 COPY src ./src
 COPY prompts ./prompts
 COPY build.ts ./
-# If you have a tsconfig.json and it's required for the build, uncomment the next line
 COPY tsconfig.json ./
+COPY drizzle.config.ts ./
 
 # Run the build script (defined in package.json)
 # This will create the /app/dist directory
