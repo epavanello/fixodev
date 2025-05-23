@@ -19,6 +19,6 @@
     },
     "types": ["bun-types"]
   },
-  "include": ["src/**/*", "scripts/**/*", "build.ts"],
+  "include": ["src/**/*", "scripts/**/*", "build.ts", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -40,22 +40,14 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
         !notification.repository ||
         notification.repository.private
       ) {
-        // Mark as read if not relevant to free up notification space, or handle as needed
-        // For now, only processing mentions explicitly
-        // If we decide to mark as read, ensure notification.id is correctly parsed:
-        // await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
-        continue;
-      }
-
-      // Fetch the issue or comment URL to get the full body
-      const subjectUrl = notification.subject.url; // This is an API URL
-      if (!subjectUrl) {
-        logger.warn({ notificationId: notification.id }, 'Notification subject URL is missing.');
+        await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
         continue;
       }
 
       try {
-        const subjectDetailsResponse = await octokit.request(`GET ${subjectUrl}`);
+        const subjectDetailsResponse = await octokit.request<Issue | PullRequest>({
+          url: `GET ${notification.subject.url}`,
+        });
         const subjectData = subjectDetailsResponse.data;
 
         const commandBody = subjectData.body;
@@ -65,25 +57,16 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           continue;
         }
 
-        // Determine if it's an issue or a PR comment to get the correct issue/PR number for the job
-        // The notification.subject.title gives the issue/PR title.
-        // The notification.repository gives owner/name.
-        // The `subjectData` (from issue/comment API) gives more details like sender.
-
         let eventIssueNumber: number | undefined;
         if (notification.subject.type === 'Issue') {
-          eventIssueNumber = (subjectData as Issue).number;
+          eventIssueNumber = subjectData.number;
         } else if (notification.subject.type === 'PullRequest') {
-          eventIssueNumber = (subjectData as PullRequest).number;
-        } else if (subjectData.issue_url) {
-          // For issue comments, subjectData.issue_url exists
-          const issueUrl = subjectData.issue_url;
-          eventIssueNumber = parseInt(issueUrl.substring(issueUrl.lastIndexOf('/') + 1));
+          eventIssueNumber = subjectData.number;
         }
 
         if (!eventIssueNumber || isNaN(eventIssueNumber)) {
           logger.error(
-            { notificationId: notification.id, subjectUrl },
+            { notificationId: notification.id, subjectUrl: notification.subject.url },
             'Could not determine issue/PR number from notification.',
           );
           await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
@@ -99,10 +82,10 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           eventIssueTitle:
             notification.subject.title || `Mention in ${notification.repository.full_name}`,
           commandToProcess: commandBody,
-          triggeredBy: subjectData.user?.login || 'unknown_user', // User who wrote the comment/issue
+          triggeredBy: subjectData.user?.login || 'unknown_user',
         };
 
-        jobQueue.addJob(userMentionJob);
+        await jobQueue.addJob(userMentionJob);
         logger.info(
           {
             jobId: userMentionJob.id,
@@ -118,7 +101,6 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           { notificationId: notification.id, error: error },
           'Failed to process individual notification or fetch subject details.',
         );
-        // Optionally mark as read to prevent retrying a persistently failing notification
         await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
       }
     }

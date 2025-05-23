@@ -1,21 +1,34 @@
-import { QueuedJob } from '../types/jobs';
-import { ManagedJob } from './job';
+import {
+  AppMentionOnIssueJob,
+  QueuedJob,
+  UserMentionOnIssueJob,
+  WorkerJob,
+  JobStatus,
+} from '../types/jobs';
 import { logger } from '../config/logger';
 import { processJob } from './worker';
-import { loadQueueFromDisk, saveQueueToDisk } from './persistence';
+import { db } from '../db';
+import { jobsTable, JobInsert, JobSelect } from '../db/schema';
+import { eq, and, asc } from 'drizzle-orm';
+import { v4 as uuidv4 } from 'uuid';
 
 class JobQueue {
-  private queue: ManagedJob[] = [];
   private isProcessing = false;
-  private currentlyProcessingJobId: string | null = null;
+  private maxRetries = 3;
 
   /**
-   * Add a new job to the queue
+   * Add a new job to the queue.
+   * The payload will contain all properties of QueuedJob except 'id' and 'type'.
    */
-  public addJob(jobData: QueuedJob): ManagedJob {
+  public async addJob(jobData: QueuedJob): Promise<JobSelect> {
+    const { id, type, ...payloadData } = jobData;
+    const jobId = id || uuidv4();
     const now = new Date();
-    const managedJob: ManagedJob = {
-      ...jobData,
+
+    const newJob: JobInsert = {
+      id: jobId,
+      type: type,
+      payload: payloadData,
       status: 'pending',
       createdAt: now,
       updatedAt: now,
@@ -23,118 +36,164 @@ class JobQueue {
       logs: [],
     };
 
-    this.queue.push(managedJob);
-    logger.info({ jobId: managedJob.id, type: managedJob.type }, 'Job added to queue');
-
-    if (!this.isProcessing) {
-      this.processNextJob();
-    }
-    return managedJob;
+    return (await db.insert(jobsTable).values(newJob).returning())[0];
   }
 
   /**
-   * Get the next job from the queue that is not currently being processed.
+   * Get the next job from the database that is pending and not currently being processed.
+   * Prioritizes older jobs.
    */
-  private getNextJob(): ManagedJob | undefined {
-    return this.queue.find(
-      job => job.status === 'pending' && job.id !== this.currentlyProcessingJobId,
-    );
+  private async getNextJob(): Promise<JobSelect | undefined> {
+    try {
+      const conditions = [eq(jobsTable.status, 'pending')];
+
+      const result = await db
+        .select()
+        .from(jobsTable)
+        .where(and(...conditions))
+        .orderBy(asc(jobsTable.createdAt))
+        .limit(1);
+
+      return result[0];
+    } catch (error) {
+      logger.error({ error }, 'Failed to get next job from database');
+      return undefined;
+    }
   }
 
   /**
    * Process the next job in the queue
    */
-  private async processNextJob() {
+  async processNextJob(): Promise<void> {
     if (this.isProcessing) {
-      logger.debug('Already processing a job or processNextJob called concurrently');
       return;
     }
 
-    const job = this.getNextJob();
+    const jobFromDb = await this.getNextJob();
 
-    if (!job) {
-      this.isProcessing = false;
-      logger.debug('No pending jobs to process.');
+    if (!jobFromDb) {
       return;
     }
 
     this.isProcessing = true;
-    this.currentlyProcessingJobId = job.id;
+    const currentAttempt = jobFromDb.attempts + 1;
+    const jobProcessingStartTime = new Date();
+
+    // Update job status to 'processing' in DB
+    try {
+      await db
+        .update(jobsTable)
+        .set({
+          status: 'processing',
+          updatedAt: jobProcessingStartTime,
+          attempts: currentAttempt,
+        })
+        .where(eq(jobsTable.id, jobFromDb.id));
+    } catch (dbError) {
+      logger.error(
+        { jobId: jobFromDb.id, error: dbError },
+        'Failed to update job to processing in DB',
+      );
+      this.isProcessing = false;
+      setTimeout(() => this.processNextJob(), 1000);
+      return;
+    }
+
+    // Construct WorkerJob from JobSelect (jobFromDb)
+    let specificQueuedJobPart: QueuedJob;
+    if (jobFromDb.type === 'app_mention') {
+      specificQueuedJobPart = {
+        ...(jobFromDb.payload as Omit<AppMentionOnIssueJob, 'id' | 'type'>),
+        id: jobFromDb.id,
+        type: 'app_mention',
+      } as AppMentionOnIssueJob;
+    } else if (jobFromDb.type === 'user_mention') {
+      specificQueuedJobPart = {
+        ...(jobFromDb.payload as Omit<UserMentionOnIssueJob, 'id' | 'type'>),
+        id: jobFromDb.id,
+        type: 'user_mention',
+      } as UserMentionOnIssueJob;
+    } else {
+      // Should not happen if DB types are constrained
+      logger.error(
+        { jobId: jobFromDb.id, type: jobFromDb.type },
+        'Unknown job type from DB during WorkerJob construction',
+      );
+      // Handle error appropriately, maybe mark job as failed and return
+      this.isProcessing = false;
+      // Mark as failed to prevent reprocessing loop for unknown type
+      await db
+        .update(jobsTable)
+        .set({
+          status: 'failed',
+          logs: [...jobFromDb.logs, 'Internal Error: Unknown job type from DB'],
+          updatedAt: new Date(),
+        })
+        .where(eq(jobsTable.id, jobFromDb.id));
+      setTimeout(() => this.processNextJob(), 0);
+      return;
+    }
+
+    const jobForWorker: WorkerJob = {
+      ...specificQueuedJobPart,
+      status: 'processing',
+      createdAt: new Date(jobFromDb.createdAt),
+      updatedAt: jobProcessingStartTime,
+      attempts: currentAttempt,
+      logs: [...jobFromDb.logs],
+    };
+
+    logger.info(
+      { jobId: jobForWorker.id, type: jobForWorker.type, attempt: jobForWorker.attempts },
+      'Processing job',
+    );
 
     try {
-      job.status = 'processing';
-      job.updatedAt = new Date();
-      job.attempts += 1;
+      await processJob(jobForWorker);
 
-      logger.info({ jobId: job.id, type: job.type, attempt: job.attempts }, 'Processing job');
-
-      await processJob(job);
-
-      job.status = 'completed';
-      job.logs.push(`Attempt ${job.attempts}: Job completed successfully`);
-      logger.info({ jobId: job.id, type: job.type }, 'Job completed');
+      // Job completed successfully
+      logger.info({ jobId: jobForWorker.id, type: jobForWorker.type }, 'Job completed by worker');
+      await db
+        .update(jobsTable)
+        .set({
+          status: 'completed',
+          logs: jobForWorker.logs,
+          updatedAt: new Date(),
+        })
+        .where(eq(jobsTable.id, jobForWorker.id));
     } catch (error) {
-      job.status = 'failed';
       const errorMessage = error instanceof Error ? error.message : String(error);
-      job.logs.push(`Attempt ${job.attempts}: Job failed: ${errorMessage}`);
+      jobForWorker.logs.push(`Attempt ${jobForWorker.attempts}: Job failed: ${errorMessage}`);
       logger.error(
         {
-          jobId: job.id,
-          type: job.type,
+          jobId: jobForWorker.id,
+          type: jobForWorker.type,
           error: errorMessage,
           stack: error instanceof Error ? error.stack : undefined,
         },
-        'Job failed',
+        'Job processing failed',
       );
+
+      const newStatus: JobStatus = jobForWorker.attempts >= this.maxRetries ? 'failed' : 'pending';
+
+      await db
+        .update(jobsTable)
+        .set({
+          status: newStatus,
+          logs: jobForWorker.logs,
+          updatedAt: new Date(),
+        })
+        .where(eq(jobsTable.id, jobForWorker.id));
+
+      if (newStatus === 'pending') {
+        logger.info({ jobId: jobForWorker.id }, 'Job re-queued after failure');
+      } else {
+        logger.warn({ jobId: jobForWorker.id }, 'Job failed after max retries');
+      }
     } finally {
-      job.updatedAt = new Date();
       this.isProcessing = false;
-      this.currentlyProcessingJobId = null;
-
+      // Immediately try to process the next job
       setTimeout(() => this.processNextJob(), 0);
-    }
-  }
-
-  /**
-   * Get all jobs in the queue
-   */
-  public getJobs(): ManagedJob[] {
-    return [...this.queue];
-  }
-
-  /**
-   * Get a job by ID
-   */
-  public getJob(id: string): ManagedJob | undefined {
-    return this.queue.find(job => job.id === id);
-  }
-
-  public cleanupOldJobs() {
-    this.queue = this.queue.filter(job => job.status === 'pending' || job.status === 'processing');
-  }
-
-  /**
-   * Save queue state to disk - Placeholder if persistence.ts needs changes
-   */
-  public async saveState() {
-    await saveQueueToDisk(this.queue);
-    logger.info({ count: this.queue.length }, 'Queue state saved to disk.');
-  }
-
-  /**
-   * Load queue state from disk
-   */
-  public async loadState() {
-    try {
-      const loadedJobs = await loadQueueFromDisk();
-      this.queue = loadedJobs as ManagedJob[];
-      logger.info({ count: this.queue.length }, 'Queue state loaded from disk.');
-    } catch (error) {
-      logger.error({ error }, 'Failed to load queue from disk. Starting with an empty queue.');
-      this.queue = [];
-    }
-    if (!this.isProcessing) {
-      this.processNextJob();
     }
   }
 }

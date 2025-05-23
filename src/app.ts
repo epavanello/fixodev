@@ -18,7 +18,7 @@ app.route('/', rootRouter);
 const start = async () => {
   try {
     // Load queue state from disk
-    await jobQueue.loadState();
+    jobQueue.processNextJob();
 
     // Start the notification poller if configured
     if (envConfig.BOT_USER_PAT && envConfig.BOT_NAME) {
@@ -26,13 +26,6 @@ const start = async () => {
     } else {
       logger.warn('Notification poller not started: BOT_USER_PAT or BOT_NAME not configured.');
     }
-
-    // Set up periodic queue persistence
-    const SAVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-    setInterval(() => {
-      jobQueue.cleanupOldJobs();
-      jobQueue.saveState();
-    }, SAVE_INTERVAL);
 
     // Start the server using Hono's native server
     Bun.serve({
@@ -51,9 +44,6 @@ const start = async () => {
 // Graceful shutdown
 const shutdown = async () => {
   logger.info('Shutting down server...');
-
-  // Save queue state before exiting
-  await jobQueue.saveState();
 
   process.exit(0);
 };

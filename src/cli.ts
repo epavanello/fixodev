@@ -31,7 +31,7 @@ async function main() {
       try {
         const result = await processCodeModificationRequest(
           userInput,
-          path.resolve(process.cwd()),
+          path.resolve(process.cwd(), '..', 'cheatgpt_new'),
           await loadBotConfig(path.resolve(process.cwd())),
           true,
           taskCompletionTool,

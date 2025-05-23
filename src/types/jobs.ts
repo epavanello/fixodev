@@ -10,8 +10,8 @@ interface BaseJob {
  * Common properties for all jobs processed by the worker.
  */
 interface BaseMentionOnIssueJob extends BaseJob {
-  commandToProcess: string; // The full command string from the issue/comment body
-  triggeredBy: string; // Username or App name that triggered the event
+  commandToProcess: string;
+  triggeredBy: string;
 }
 
 /**
@@ -20,10 +20,7 @@ interface BaseMentionOnIssueJob extends BaseJob {
 export interface AppMentionOnIssueJob extends BaseMentionOnIssueJob {
   type: 'app_mention';
   installationId: number;
-  repositoryUrl: string; // Clone URL for the original repository
-  // Specific event payload for App mentions, if needed for detailed context later
-  // For now, common fields are in BaseJob. Can add specific event types if handlers need them.
-  // eventPayload: IssuesOpenedEvent | IssueCommentCreatedEvent;
+  repositoryUrl: string;
 }
 
 /**
@@ -46,3 +43,18 @@ export function isAppMentionJob(job: QueuedJob): job is AppMentionOnIssueJob {
 export function isUserMentionJob(job: QueuedJob): job is UserMentionOnIssueJob {
   return job.type === 'user_mention';
 }
+
+export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Represents the structure of a job as expected by the core job processing worker.
+ * It includes all specific job fields at the top level, along with queue management state.
+ * Timestamps are Date objects.
+ */
+export type WorkerJob = QueuedJob & {
+  status: JobStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  attempts: number;
+  logs: string[];
+};

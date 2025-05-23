@@ -49,6 +49,8 @@ RUN mkdir -p data repos
 # Expose the application port
 EXPOSE 3000
 
+RUN bun run db:migrate
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1

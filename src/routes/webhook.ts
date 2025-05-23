@@ -156,9 +156,7 @@ router.post('/github', async c => {
         repositoryUrl: repositoryUrl,
       };
 
-      // Assuming jobQueue.addJob can handle this new job structure.
-      // The actual Job type in job.ts might need to be QueuedJob from types/jobs.ts
-      const queuedJobEntry = jobQueue.addJob(jobToQueue);
+      const queuedJobEntry = await jobQueue.addJob(jobToQueue);
 
       logger.info(
         { jobId: queuedJobEntry.id, eventName, action: eventAction },

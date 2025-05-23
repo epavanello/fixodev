@@ -1,5 +1,4 @@
-import { isAppMentionJob, isUserMentionJob } from '../types/jobs';
-import { ManagedJob } from '../queue/job';
+import { isAppMentionJob, isUserMentionJob, WorkerJob } from '../types/jobs';
 import { BotConfig } from '../types/config';
 import { logger as rootLogger } from '../config/logger';
 import { GitHubApp } from '../github/app';
@@ -16,7 +15,7 @@ import { taskCompletionTool } from '@/llm/tools/task';
 
 const handlerLogger = rootLogger.child({ context: 'MentionOnIssueJobHandler' });
 
-export async function handleMentionOnIssueJob(job: ManagedJob): Promise<void> {
+export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
   const {
     id: jobId,
     originalRepoOwner,
