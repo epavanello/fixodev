@@ -83,3 +83,19 @@ export const pushChanges = async (git: SimpleGit, branchName: string): Promise<v
     );
   }
 };
+
+/**
+ * Checkout a specific branch or commit
+ */
+export const checkout = async (git: SimpleGit, ref: string): Promise<void> => {
+  try {
+    logger.info({ ref }, 'Checking out reference');
+    await git.checkout(ref);
+    logger.info({ ref }, 'Successfully checked out reference');
+  } catch (error) {
+    logger.error({ ref, error }, 'Failed to checkout reference');
+    throw new GitHubError(
+      `Failed to checkout reference: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};

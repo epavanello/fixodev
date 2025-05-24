@@ -10,7 +10,7 @@ import {
 export const isIssueEvent = (event: Schema): event is IssuesEvent => {
   // Octokit's IssuesEvent typically has an 'issue' property and an 'action' property.
   // The absence of 'pull_request' helps distinguish from PR-related events.
-  return 'issue' in event && !('pull_request' in event) && 'action' in event;
+  return 'issue' in event && !('pull_request' in event.issue) && 'action' in event;
 };
 
 export const isPullRequestEvent = (event: Schema): event is PullRequestEvent => {
@@ -21,6 +21,15 @@ export const isPullRequestEvent = (event: Schema): event is PullRequestEvent => 
 export const isIssueCommentEvent = (event: Schema): event is IssueCommentEvent => {
   // Octokit's IssueCommentEvent typically has 'issue', 'comment', and 'action' properties.
   return 'issue' in event && 'comment' in event && 'action' in event;
+};
+
+export const isPullRequestCommentEvent = (event: Schema): event is IssueCommentEvent => {
+  // A PR comment is an issue_comment event where the issue object also contains a pull_request object.
+  return (
+    isIssueCommentEvent(event) &&
+    'pull_request' in event.issue &&
+    event.issue.pull_request !== null
+  );
 };
 
 export const isPullRequestReviewEvent = (event: Schema): event is PullRequestReviewEvent => {

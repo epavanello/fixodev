@@ -4,13 +4,14 @@ import {
   UserMentionOnIssueJob,
   WorkerJob,
   JobStatus,
-} from '../types/jobs';
-import { logger } from '../config/logger';
-import { processJob } from './worker';
-import { db } from '../db';
-import { jobsTable, JobInsert, JobSelect } from '../db/schema';
-import { eq, and, asc } from 'drizzle-orm';
-import { v4 as uuidv4 } from 'uuid';
+  AppMentionOnPullRequestJob,
+} from "../types/jobs";
+import { logger } from "../config/logger";
+import { processJob } from "./worker";
+import { db } from "../db";
+import { jobsTable, JobInsert, JobSelect } from "../db/schema";
+import { eq, and, asc } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
 
 class JobQueue {
   private isProcessing = false;
@@ -29,7 +30,7 @@ class JobQueue {
       id: jobId,
       type: type,
       payload: payloadData,
-      status: 'pending',
+      status: "pending",
       createdAt: now,
       updatedAt: now,
       attempts: 0,
@@ -51,7 +52,7 @@ class JobQueue {
    */
   private async getNextJob(): Promise<JobSelect | undefined> {
     try {
-      const conditions = [eq(jobsTable.status, 'pending')];
+      const conditions = [eq(jobsTable.status, "pending")];
 
       const result = await db
         .select()
@@ -62,7 +63,7 @@ class JobQueue {
 
       return result[0];
     } catch (error) {
-      logger.error({ error }, 'Failed to get next job from database');
+      logger.error({ error }, "Failed to get next job from database");
       return undefined;
     }
   }
@@ -90,7 +91,7 @@ class JobQueue {
       await db
         .update(jobsTable)
         .set({
-          status: 'processing',
+          status: "processing",
           updatedAt: jobProcessingStartTime,
           attempts: currentAttempt,
         })
@@ -98,7 +99,7 @@ class JobQueue {
     } catch (dbError) {
       logger.error(
         { jobId: jobFromDb.id, error: dbError },
-        'Failed to update job to processing in DB',
+        "Failed to update job to processing in DB",
       );
       this.isProcessing = false;
       setTimeout(() => this.processNextJob(), 1000);
@@ -107,23 +108,29 @@ class JobQueue {
 
     // Construct WorkerJob from JobSelect (jobFromDb)
     let specificQueuedJobPart: QueuedJob;
-    if (jobFromDb.type === 'app_mention') {
+    if (jobFromDb.type === "app_mention_issue") {
       specificQueuedJobPart = {
-        ...(jobFromDb.payload as Omit<AppMentionOnIssueJob, 'id' | 'type'>),
+        ...(jobFromDb.payload as Omit<AppMentionOnIssueJob, "id" | "type">),
         id: jobFromDb.id,
-        type: 'app_mention',
+        type: "app_mention_issue",
       } as AppMentionOnIssueJob;
-    } else if (jobFromDb.type === 'user_mention') {
+    } else if (jobFromDb.type === "user_mention_issue") {
       specificQueuedJobPart = {
-        ...(jobFromDb.payload as Omit<UserMentionOnIssueJob, 'id' | 'type'>),
+        ...(jobFromDb.payload as Omit<UserMentionOnIssueJob, "id" | "type">),
         id: jobFromDb.id,
-        type: 'user_mention',
+        type: "user_mention_issue",
       } as UserMentionOnIssueJob;
+    } else if (jobFromDb.type === "app_mention_pr") {
+      specificQueuedJobPart = {
+        ...(jobFromDb.payload as Omit<AppMentionOnPullRequestJob, "id" | "type">),
+        id: jobFromDb.id,
+        type: "app_mention_pr",
+      } as AppMentionOnPullRequestJob;
     } else {
       // Should not happen if DB types are constrained
       logger.error(
         { jobId: jobFromDb.id, type: jobFromDb.type },
-        'Unknown job type from DB during WorkerJob construction',
+        "Unknown job type from DB during WorkerJob construction",
       );
       // Handle error appropriately, maybe mark job as failed and return
       this.isProcessing = false;
@@ -131,8 +138,8 @@ class JobQueue {
       await db
         .update(jobsTable)
         .set({
-          status: 'failed',
-          logs: [...jobFromDb.logs, 'Internal Error: Unknown job type from DB'],
+          status: "failed",
+          logs: [...jobFromDb.logs, "Internal Error: Unknown job type from DB"],
           updatedAt: new Date(),
         })
         .where(eq(jobsTable.id, jobFromDb.id));
@@ -142,7 +149,7 @@ class JobQueue {
 
     const jobForWorker: WorkerJob = {
       ...specificQueuedJobPart,
-      status: 'processing',
+      status: "processing",
       createdAt: new Date(jobFromDb.createdAt),
       updatedAt: jobProcessingStartTime,
       attempts: currentAttempt,
@@ -151,18 +158,18 @@ class JobQueue {
 
     logger.info(
       { jobId: jobForWorker.id, type: jobForWorker.type, attempt: jobForWorker.attempts },
-      'Processing job',
+      "Processing job",
     );
 
     try {
       await processJob(jobForWorker);
 
       // Job completed successfully
-      logger.info({ jobId: jobForWorker.id, type: jobForWorker.type }, 'Job completed by worker');
+      logger.info({ jobId: jobForWorker.id, type: jobForWorker.type }, "Job completed by worker");
       await db
         .update(jobsTable)
         .set({
-          status: 'completed',
+          status: "completed",
           logs: jobForWorker.logs,
           updatedAt: new Date(),
         })
@@ -177,10 +184,10 @@ class JobQueue {
           error: errorMessage,
           stack: error instanceof Error ? error.stack : undefined,
         },
-        'Job processing failed',
+        "Job processing failed",
       );
 
-      const newStatus: JobStatus = jobForWorker.attempts >= this.maxRetries ? 'failed' : 'pending';
+      const newStatus: JobStatus = jobForWorker.attempts >= this.maxRetries ? "failed" : "pending";
 
       await db
         .update(jobsTable)
@@ -191,10 +198,10 @@ class JobQueue {
         })
         .where(eq(jobsTable.id, jobForWorker.id));
 
-      if (newStatus === 'pending') {
-        logger.info({ jobId: jobForWorker.id }, 'Job re-queued after failure');
+      if (newStatus === "pending") {
+        logger.info({ jobId: jobForWorker.id }, "Job re-queued after failure");
       } else {
-        logger.warn({ jobId: jobForWorker.id }, 'Job failed after max retries');
+        logger.warn({ jobId: jobForWorker.id }, "Job failed after max retries");
       }
     } finally {
       this.isProcessing = false;
