@@ -1,4 +1,4 @@
-import { isAppMentionJob, isUserMentionJob, WorkerJob } from '../types/jobs';
+import { isAppMentionJob, isUserMentionJob, isPullRequestCommentJob, WorkerJob } from '../types/jobs';
 import { BotConfig } from '../types/config';
 import { logger as rootLogger } from '../config/logger';
 import { GitHubApp } from '../github/app';
@@ -24,9 +24,13 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     originalRepoName,
     eventIssueNumber,
     eventIssueTitle,
-    commandToProcess,
     triggeredBy,
   } = job;
+
+  let commandToProcess: string;
+  let prNumber: number | undefined;
+  let prHeadRef: string | undefined;
+  let prHeadSha: string | undefined;
 
   const logger = handlerLogger.child({
     jobId,
@@ -54,6 +58,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     cloneToken = await githubApp.getInstallationToken(job.installationId);
     repositoryToCloneUrl = job.repositoryUrl;
     headBranchOwner = originalRepoOwner;
+    commandToProcess = job.commandToProcess;
     logger.info('Successfully authenticated as GitHub App installation.');
   } else if (isUserMentionJob(job)) {
     logger.info('Job identified as UserMention. Setting up PAT authentication and forking.');
@@ -66,6 +71,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     octokit = new Octokit({ auth: envConfig.BOT_USER_PAT });
     cloneToken = envConfig.BOT_USER_PAT;
     headBranchOwner = envConfig.BOT_NAME;
+    commandToProcess = job.commandToProcess;
 
     logger.info(`Authenticating as user @${headBranchOwner} for fork operations.`);
     const forkResult: ForkResult = await ensureForkExists(
@@ -79,6 +85,18 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     logger.info(
       `Ensured fork exists: ${forkResult.forkOwner}/${forkResult.forkRepoName} at ${repositoryToCloneUrl}`,
     );
+  } else if (isPullRequestCommentJob(job)) {
+    logger.info('Job identified as PullRequestComment. Setting up GitHub App authentication.');
+    const githubApp = new GitHubApp();
+    octokit = await githubApp.getAuthenticatedClient(job.installationId);
+    cloneToken = await githubApp.getInstallationToken(job.installationId);
+    repositoryToCloneUrl = job.repositoryUrl;
+    headBranchOwner = originalRepoOwner; // For PR comments, the head branch owner is usually the original repo owner
+    commandToProcess = job.commentBody;
+    prNumber = job.prNumber;
+    prHeadRef = job.prHeadRef;
+    prHeadSha = job.prHeadSha;
+    logger.info('Successfully authenticated as GitHub App installation for PR comment.');
   } else {
     throw new JobError(`Unknown job type for job ID ${jobId}`);
   }
@@ -160,17 +178,25 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
       jobType: job.type,
     });
 
-    const cloneResult = await cloneRepository(repositoryToCloneUrl, undefined, cloneToken);
+    const cloneResult = await cloneRepository(repositoryToCloneUrl, prHeadRef, cloneToken);
     repoPath = cloneResult.path;
     const git = cloneResult.git;
     logger.info({ repoPath }, 'Repository cloned successfully.');
 
+    // If it's a PR comment job, checkout the specific SHA
+    if (prHeadSha) {
+      logger.info({ prHeadSha }, 'Checking out PR head SHA.');
+      await git.checkout(prHeadSha);
+    }
+
     const botConfig = (await loadBotConfig(repoPath)) as BotConfig;
     logger.info({ botConfig }, 'Loaded bot configuration.');
 
-    const branchName = `${envConfig.BOT_NAME}/${eventIssueNumber}-${Date.now().toString().slice(-6)}`;
-    await createBranch(git, branchName);
-    logger.info({ branchName }, 'Created new branch.');
+    const branchName = prHeadRef || `${envConfig.BOT_NAME}/${eventIssueNumber}-${Date.now().toString().slice(-6)}`;
+    if (!prHeadRef) {
+      await createBranch(git, branchName);
+      logger.info({ branchName }, 'Created new branch.');
+    }
 
     const modificationResult = await processCodeModificationRequest(
       commandToProcess,
@@ -197,19 +223,26 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
       await pushChanges(git, branchName);
       logger.info('Changes committed and pushed.');
 
-      const pr = await createPullRequest(octokit, {
-        owner: originalRepoOwner,
-        repo: originalRepoName,
-        title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by @${envConfig.BOT_NAME}`,
-        head: `${headBranchOwner}:${branchName}`,
-        base: botConfig.branches.target || 'main',
-        body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
-        labels: ['bot', envConfig.BOT_NAME.toLowerCase()],
-      });
-      prUrl = pr;
-      logger.info({ prUrl }, 'Pull request created successfully.');
+      if (prNumber) {
+        // If it's a PR comment job, we don't create a new PR, we just push to the existing branch
+        // The PR will automatically update
+        prUrl = `https://github.com/${originalRepoOwner}/${originalRepoName}/pull/${prNumber}`;
+        logger.info({ prUrl }, 'Changes pushed to existing pull request.');
+      } else {
+        const pr = await createPullRequest(octokit, {
+          owner: originalRepoOwner,
+          repo: originalRepoName,
+          title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by @${envConfig.BOT_NAME}`,
+          head: `${headBranchOwner}:${branchName}`,
+          base: botConfig.branches.target || 'main',
+          body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
+          labels: ['bot', envConfig.BOT_NAME.toLowerCase()],
+        });
+        prUrl = pr;
+        logger.info({ prUrl }, 'Pull request created successfully.');
+      }
     } else {
-      logger.info('No changes to commit. Skipping PR creation.');
+      logger.info('No changes to commit. Skipping PR creation/update.');
     }
 
     if (initialCommentId) {
@@ -223,7 +256,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
 
     let replyMessage: string;
     if (prUrl) {
-      replyMessage = `✅ @${triggeredBy}, I've created a pull request for you: ${prUrl}`;
+      replyMessage = `✅ @${triggeredBy}, I've updated the pull request: ${prUrl}`;
     } else {
       replyMessage = `✅ @${triggeredBy}, I received your request, but no actionable changes were identified or no changes were necessary after running checks.`;
       logger.info('Replying that no changes were made or command was not actionable.');
