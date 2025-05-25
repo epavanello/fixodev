@@ -52,7 +52,12 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
         const subjectData = subjectDetailsResponse.data;
 
         const commandBody = subjectData.body;
-        if (!commandBody || !commandBody.toLowerCase().includes(BOT_USER_MENTION)) {
+        if (
+          !commandBody ||
+          !commandBody.toLowerCase().includes(BOT_USER_MENTION) ||
+          subjectData.user?.login.toLowerCase() === `${envConfig.BOT_NAME.toLowerCase()}` ||
+          subjectData.user?.login.toLowerCase() === `${envConfig.BOT_NAME.toLowerCase()}[bot]`
+        ) {
           // Mark as read even if not a command for us, to clear notification
           await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
           continue;
