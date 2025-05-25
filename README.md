@@ -1,4 +1,4 @@
-# RepoSister Bot
+# FixO Dev Bot
 
 A GitHub App-based bot that automates code fixes and improvements through AI.
 
@@ -6,11 +6,11 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 
 1. Install the GitHub App on your repository.
 2. Configure the app settings as needed in your GitHub repository settings.
-3. Trigger the bot using one of the following ways (bot name: `@RepoSister`):
-    1. by pushing code changes to your repository
-    1. by creating an issue mentioning the bot
-    1. by creating a pull request mentioning the bot
-    1. by commenting on the pull request mentioning the bot
+3. Trigger the bot using one of the following ways (bot name: `@fixodev`):
+   1. by pushing code changes to your repository
+   1. by creating an issue mentioning the bot
+   1. by creating a pull request mentioning the bot
+   1. by commenting on the pull request mentioning the bot
 
 ## Features
 
@@ -30,10 +30,10 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 1. Clone the repository
 2. Install dependencies: `bun install`
 3. Copy `env.example` to `.env` and fill in the required values
-   - **Mandatory Environment Variables:**  
-     - `GITHUB_APP_ID`: Your GitHub App ID.  
-     - `GITHUB_PRIVATE_KEY`: Your GitHub Private Key for app authentication.  
-     - `GITHUB_WEBHOOK_SECRET`: Secret for verifying incoming webhooks.  
+   - **Mandatory Environment Variables:**
+     - `GITHUB_APP_ID`: Your GitHub App ID.
+     - `GITHUB_PRIVATE_KEY`: Your GitHub Private Key for app authentication.
+     - `GITHUB_WEBHOOK_SECRET`: Secret for verifying incoming webhooks.
      - `OPENAI_API_KEY`: API key for OpenAI services.
 4. Start the development server: `bun run dev`
 5. Run the CLI: `bun run cli`
@@ -51,9 +51,11 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 Deployment is streamlined using Docker Compose.
 
 ### Docker Compose Setup
+
 ```yaml
 docker-compose.yml configuration includes services for a Bun-based application with options for environment variables, volume mounts, and networking.
 ```
+
 - **Dockerfile** includes instructions to build the application image, incorporating Bun runtime and required dependencies.
 
 ## Potential Use Cases
@@ -65,6 +67,7 @@ docker-compose.yml configuration includes services for a Bun-based application w
 ## Additional Documentation
 
 For more in-depth details, refer to the following documents:
+
 - [MVP.md](docs/MVP.md)
 - [Technical Implementation Document.md](docs/Technical%20Implementation%20Document.md)
 

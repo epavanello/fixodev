@@ -73,7 +73,7 @@
 - Container configuration:
   ```typescript
   {
-    Image: 'reposister/bun:latest',
+    Image: 'bun:latest',
     Cmd: ['sh', '-c', 'cd /workspace && bun install && bun run lint'],
     HostConfig: {
       Binds: [`${localRepoPath}:/workspace:ro`],
@@ -180,7 +180,7 @@ MAX_CONCURRENT_JOBS=2
 
 ### 2.2 Bot Configuration File
 
-`.reposister.yml` in user repositories:
+`.fixodev.yml` in user repositories:
 
 ```yaml
 runtime: bun:latest
@@ -244,7 +244,7 @@ CMD ["bun", "dist/app.js"]
 
 Pre-built images for supported runtimes:
 
-- `reposister/bun:latest` - Latest Bun version with common dev tools
+- `fixodev/bun:latest` - Latest Bun version with common dev tools
 
 ## 4. Implementation Flow
 

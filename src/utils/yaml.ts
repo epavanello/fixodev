@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 import { BotConfig } from '../types/config';
 import { Runtime } from '../docker';
 
-const CONFIG_FILE = '.reposister.yml';
+const CONFIG_FILE = '.fixodev.yml';
 
 export const loadBotConfig = async (repoPath: string): Promise<BotConfig> => {
   try {

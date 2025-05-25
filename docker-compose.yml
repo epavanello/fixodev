@@ -15,10 +15,10 @@ services:
     - repos:/app/repos
     - queue-data:/app/data
     networks:
-    - reposister-network
+    - app-network
 
 networks:
-  reposister-network:
+  app-network:
     driver: bridge
 
 volumes:

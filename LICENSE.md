@@ -30,7 +30,7 @@ The rights granted above do **not** include any right to:
 
 For any use beyond non-production/non-commercial contexts, you must contact:
 
-**[license@RepoSister.ai](mailto:license@RepoSister.ai)**
+**[license@fixo.dev](mailto:license@fixo.dev)**
 
 ---
 

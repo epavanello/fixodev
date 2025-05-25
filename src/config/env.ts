@@ -11,11 +11,11 @@ const envSchema = z.object({
   GITHUB_WEBHOOK_SECRET: z.string().min(1, 'GITHUB_WEBHOOK_SECRET is required'),
 
   // Git Bot Identity
-  GIT_BOT_USERNAME: z.string().default('RepoSister Bot'),
-  GIT_BOT_EMAIL: z.string().default('bot@reposister.ai'),
+  GIT_BOT_USERNAME: z.string().default('FixO Dev'),
+  GIT_BOT_EMAIL: z.string().default('bot@fixo.dev'),
   BOT_NAME: z
     .string()
-    .default('RepoSister')
+    .default('FixO Dev')
     .transform(val => val.replace(/[^a-zA-Z0-9_.-]/g, '-')),
 
   // OpenAI
@@ -41,7 +41,7 @@ const envSchema = z.object({
     .default('true'),
 
   // Contact
-  CONTACT_EMAIL: z.string().default('sales@reposister.ai'),
+  CONTACT_EMAIL: z.string().default('sales@fixo.dev'),
 
   // Docker
   DOCKER_RUNTIME_PREFIX: z.string().optional(),

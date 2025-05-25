@@ -22,7 +22,7 @@ The service is designed to be fully automated, secure, and containerized, with f
 - [ ] Webhook handler: Triggered via GitHub events
 - [ ] Queue system: Sequential job execution with status tracking
 - [ ] Codebase clone: Shallow clone with `--depth=1`
-- [ ] `.reposister.yml`: Optional per-repo file to declare runtime + scripts
+- [ ] `.fixodev.yml`: Optional per-repo file to declare runtime + scripts
 - [ ] Docker execution:
 
   - Prebuilt Docker images for each supported runtime
@@ -105,7 +105,7 @@ With AI-only assistance (prompting): \~40–60 hrs
 
 ### Value-Add Premium Features
 
-- `.reposister.yml` overrides
+- `.fixodev.yml` overrides
 - LLM model selection (Claude, GPT-4, etc.)
 - Advanced fix categories (refactor, CI fixes)
 - Multi-repo batch fixes
