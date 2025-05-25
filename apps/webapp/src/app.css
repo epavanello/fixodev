@@ -1,0 +1,29 @@
+@import 'tailwindcss';
+
+@theme {
+	--default-transition-duration: 150ms;
+
+	--color-primary: #82aaff;
+	--color-accent: #a07ed4;
+	--color-background: #0a0e14;
+	--color-surface: #111827;
+
+	--shadow-glow: 0 0 10px rgba(130, 170, 255, 0.6);
+}
+
+/* Enable dark mode by default */
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+	}
+}
+
+/* Custom Glow Effect */
+.glow {
+	box-shadow: 0 0 10px rgba(130, 170, 255, 0.6);
+}
+
+html,
+body {
+	@apply h-full w-full;
+}

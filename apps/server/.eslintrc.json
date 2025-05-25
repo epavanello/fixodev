@@ -3,7 +3,7 @@
   "parserOptions": {
     "ecmaVersion": 2022,
     "sourceType": "module",
-    "project": "./tsconfig.json"
+    "project": "apps/server/tsconfig.json"
   },
   "plugins": ["@typescript-eslint", "prettier"],
   "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],

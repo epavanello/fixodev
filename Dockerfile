@@ -8,15 +8,16 @@ RUN mkdir -p data repos
 
 # Copy package.json and install all dependencies (including devDependencies)
 # This step also generates/updates bun.lockb
-COPY package.json ./
+COPY apps/server/package.json ./
 RUN bun install
 
 # Copy source code required for the build
-COPY src ./src
-COPY prompts ./prompts
-COPY build.ts ./
-COPY tsconfig.json ./
-COPY drizzle.config.ts ./
+COPY apps/server/src ./src
+COPY apps/server/prompts ./prompts
+COPY apps/server/scripts ./scripts
+COPY apps/server/build.ts ./
+COPY apps/server/tsconfig.json ./
+COPY apps/server/drizzle.config.ts ./
 
 # Run the build script (defined in package.json)
 # This will create the /app/dist directory
@@ -45,11 +46,11 @@ RUN bun install --production --no-optional
 # Copy the built application (dist directory) from the builder stage
 COPY --from=builder /app/dist ./
 
-COPY drizzle.config.ts ./
-COPY src/db/schema.ts ./src/db/schema.ts
+COPY apps/server/drizzle.config.ts ./
+COPY apps/server/src/db/schema.ts ./src/db/schema.ts
 
 # Copy the entrypoint script
-COPY entrypoint.sh .
+COPY apps/server/entrypoint.sh .
 RUN chmod +x ./entrypoint.sh
 
 # Expose the application port

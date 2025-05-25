@@ -1,8 +1,9 @@
 import { config } from 'dotenv';
 import { z } from 'zod';
+import path from 'path';
 
-// Load environment variables from .env file
-config();
+config({ path: path.resolve(process.cwd(), '.env') });
+config({ path: path.resolve(process.cwd(), '../../.env') });
 
 const envSchema = z.object({
   // GitHub App

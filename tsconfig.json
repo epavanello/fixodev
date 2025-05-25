@@ -1,24 +1,18 @@
 {
+  "files": [],
+  "references": [
+    { "path": "apps/server" },
+    { "path": "apps/webapp" },
+    { "path": "packages/shared-utils" }
+  ],
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM"],
-    "outDir": "dist",
-    "rootDir": ".",
+    "composite": true,
+    "module": "esnext",
+    "target": "es2022",
     "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "sourceMap": true,
-    "declaration": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
-    },
-    "types": ["bun-types"]
-  },
-  "include": ["src/**/*", "scripts/**/*", "build.ts", "drizzle.config.ts"],
-  "exclude": ["node_modules", "dist"]
+      "@fixodev/shared-utils/*": ["packages/shared-utils/src/*"]
+    }
+  }
 }

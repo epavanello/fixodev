@@ -1,81 +1,15 @@
 {
-  "name": "fixodev",
-  "version": "0.1.0",
-  "description": "GitHub Bot for automated code fixes and improvements",
-  "main": "dist/app.js",
-  "directories": {
-    "doc": "docs",
-    "test": "test"
-  },
-  "scripts": {
-    "build": "bun run build.ts",
-    "build:prompts": "bun run scripts/generate-prompts.ts",
-    "dev": "concurrently --kill-others-on-fail \"bun --watch src/app.ts\" \"bun run scripts/generate-prompts.ts --watch\"",
-    "dev:proxy": "bunx ngrok http 3000",
-    "db:migrate": "bun run drizzle-kit push",
-    "db:studio": "bun run drizzle-kit studio",
-    "start": "bun run dist/app.js",
-    "lint": "eslint 'src/**/*.ts'",
-    "lint:fix": "eslint 'src/**/*.ts' --fix",
-    "format": "prettier --write 'src/**/*.ts'",
-    "test": "bun test",
-    "cli": "bun run src/cli.ts"
-  },
-  "keywords": [
-    "github",
-    "bot",
-    "automation",
-    "code-fixing",
-    "linting"
+  "name": "fixodev-monorepo",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
   ],
-  "author": "",
-  "license": "BSL-1.1",
-  "licenseFile": "LICENSE.md",
-  "dependencies": {
-    "@handlebars/parser": "^2.2.0",
-    "@hono/node-server": "^1.14.1",
-    "@libsql/client": "^0.15.7",
-    "@octokit/auth-app": "^7.2.1",
-    "@octokit/rest": "^21.1.1",
-    "@octokit/webhooks": "^13.8.2",
-    "@octokit/webhooks-types": "^7.6.1",
-    "@openrouter/ai-sdk-provider": "^0.4.6",
-    "@voltagent/core": "^0.1.19",
-    "@voltagent/vercel-ai": "^0.1.8",
-    "ai": "^4.3.16",
-    "commander": "^13.1.0",
-    "dockerode": "^4.0.0",
-    "dotenv": "^16.0.0",
-    "drizzle-kit": "^0.31.1",
-    "drizzle-orm": "^0.43.1",
-    "fast-glob": "3.3.3",
-    "glob": "11.0.2",
-    "handlebars": "^4.7.8",
-    "hono": "^4.7.9",
-    "js-yaml": "^4.1.0",
-    "pino": "^8.0.0",
-    "pino-pretty": "^13.0.0",
-    "simple-git": "^3.0.0",
-    "uuid": "^11.1.0",
-    "yaml": "^2.0.0",
-    "zod": "^3.24.4",
-    "zod-to-json-schema": "^3.24.5"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.2.13",
-    "@types/dockerode": "^3.3.0",
-    "@types/handlebars": "^4.0.40",
-    "@types/js-yaml": "^4.0.0",
-    "@types/node": "^20.0.0",
-    "@types/uuid": "^10.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "bun-copy-plugin": "^0.2.1",
-    "concurrently": "^9.1.2",
-    "eslint": "^8.0.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.0",
-    "prettier": "^3.0.0",
-    "typescript": "^5.0.0"
+  "scripts": {
+    "dev:server": "bun run --cwd apps/server dev",
+    "build:server": "bun run --cwd apps/server build",
+    "dev:web": "bun run --cwd apps/webapp dev",
+    "build:web": "bun run --cwd apps/webapp build"
   }
 }
