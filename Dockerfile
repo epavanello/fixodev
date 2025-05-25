@@ -6,11 +6,10 @@ WORKDIR /app
 # Create data directories
 RUN mkdir -p data repos
 
-# Copy package.json and bun.lock
+# Copy package.json
 COPY apps/server/package.json ./
-COPY bun.lock ./
 
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source code required for the build
 COPY apps/server/src ./src
@@ -38,11 +37,11 @@ RUN apt-get update && \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and bun.lock from the builder stage
-COPY --from=builder /app/package.json /app/bun.lock ./
+# Copy package.json from the builder stage
+COPY --from=builder /app/package.json ./
 
-# Install only production dependencies using the locked versions
-RUN bun install --production --no-optional --frozen-lockfile
+# Install only production dependencies
+RUN bun install --production --no-optional
 
 # Copy the built application (dist directory) from the builder stage
 COPY --from=builder /app/dist ./
