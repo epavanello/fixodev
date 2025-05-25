@@ -8,7 +8,9 @@
 	--color-background: #0a0e14;
 	--color-surface: #111827;
 
-	--shadow-glow: 0 0 10px rgba(130, 170, 255, 0.6);
+	--shadow-glow: 0 0 10px color-mix(in srgb, var(--color-primary) 60%, transparent 40%);
+	--shadow-glow-primary: 0 0 10px color-mix(in srgb, var(--color-primary) 60%, transparent 40%);
+	--shadow-glow-accent: 0 0 10px color-mix(in srgb, var(--color-accent) 40%, transparent 60%);
 }
 
 /* Enable dark mode by default */
@@ -20,10 +22,21 @@
 
 /* Custom Glow Effect */
 .glow {
-	box-shadow: 0 0 10px rgba(130, 170, 255, 0.6);
+	box-shadow: var(--shadow-glow-primary);
+}
+
+.glow-accent {
+	box-shadow: var(--shadow-glow-accent);
 }
 
 html,
 body {
 	@apply h-full w-full;
+	background: radial-gradient(
+		ellipse at center bottom,
+		color-mix(in srgb, var(--color-background) 70%, var(--color-accent) 15%) 0%,
+		color-mix(in srgb, var(--color-background) 80%, var(--color-surface) 20%) 30%,
+		var(--color-background) 70%
+	);
+	background-attachment: fixed;
 }
