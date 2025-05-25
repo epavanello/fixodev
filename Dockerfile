@@ -8,7 +8,7 @@ RUN mkdir -p data repos
 
 # Copy package.json and bun.lock
 COPY apps/server/package.json ./
-COPY apps/server/bun.lock ./
+COPY bun.lock ./
 
 RUN bun install --frozen-lockfile
 
