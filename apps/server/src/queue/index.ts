@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 class JobQueue {
   private isProcessing = false;
   private maxRetries = 3;
+  private jobTimeoutMs = 10 * 60 * 3_000;
 
   /**
    * Add a new job to the queue.
@@ -39,7 +40,12 @@ class JobQueue {
     const result = (await db.insert(jobsTable).values(newJob).returning())[0];
 
     if (!this.isProcessing) {
-      this.processNextJob();
+      // Process jobs asynchronously without blocking the response
+      setImmediate(() => {
+        this.processNextJob().catch(error => {
+          logger.error({ error }, 'Unhandled error in async job processing');
+        });
+      });
     }
 
     return result;
@@ -101,7 +107,11 @@ class JobQueue {
         'Failed to update job to processing in DB',
       );
       this.isProcessing = false;
-      setTimeout(() => this.processNextJob(), 1000);
+      setTimeout(() => {
+        this.processNextJob().catch(error => {
+          logger.error({ error }, 'Error in delayed job processing retry');
+        });
+      }, 1000);
       return;
     }
 
@@ -136,7 +146,11 @@ class JobQueue {
           updatedAt: new Date(),
         })
         .where(eq(jobsTable.id, jobFromDb.id));
-      setTimeout(() => this.processNextJob(), 0);
+      setImmediate(() => {
+        this.processNextJob().catch(error => {
+          logger.error({ error }, 'Error in job processing after unknown type failure');
+        });
+      });
       return;
     }
 
@@ -155,7 +169,12 @@ class JobQueue {
     );
 
     try {
-      await processJob(jobForWorker);
+      // Add timeout to job processing
+      const jobTimeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Job processing timeout')), this.jobTimeoutMs);
+      });
+
+      await Promise.race([processJob(jobForWorker), jobTimeoutPromise]);
 
       // Job completed successfully
       logger.info({ jobId: jobForWorker.id, type: jobForWorker.type }, 'Job completed by worker');
@@ -198,8 +217,12 @@ class JobQueue {
       }
     } finally {
       this.isProcessing = false;
-      // Immediately try to process the next job
-      setTimeout(() => this.processNextJob(), 0);
+      // Immediately try to process the next job asynchronously
+      setImmediate(() => {
+        this.processNextJob().catch(error => {
+          logger.error({ error }, 'Error in next job processing cycle');
+        });
+      });
     }
   }
 }

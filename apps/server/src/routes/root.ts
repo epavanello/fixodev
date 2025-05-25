@@ -7,7 +7,7 @@ router.get('/health', c => {
 });
 
 router.get('/', c => {
-  return c.json({ status: 'ok' });
+  return c.json({ status: 'hi' });
 });
 
 export const rootRouter = router;

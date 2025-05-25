@@ -17,8 +17,11 @@ app.route('/', rootRouter);
 // Start the server
 const start = async () => {
   try {
-    // Load queue state from disk
-    jobQueue.processNextJob();
+    setImmediate(() => {
+      jobQueue.processNextJob().catch(error => {
+        logger.error({ error }, 'Error in initial job queue processing');
+      });
+    });
 
     // Start the notification poller if configured
     if (envConfig.BOT_USER_PAT && envConfig.BOT_NAME) {

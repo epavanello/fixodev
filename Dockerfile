@@ -6,10 +6,11 @@ WORKDIR /app
 # Create data directories
 RUN mkdir -p data repos
 
-# Copy package.json and install all dependencies (including devDependencies)
-# This step also generates/updates bun.lockb
+# Copy package.json and bun.lock
 COPY apps/server/package.json ./
-RUN bun install
+COPY apps/server/bun.lock ./
+
+RUN bun install --frozen-lockfile
 
 # Copy source code required for the build
 COPY apps/server/src ./src
@@ -37,11 +38,11 @@ RUN apt-get update && \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and bun.lockb from the builder stage
+# Copy package.json and bun.lock from the builder stage
 COPY --from=builder /app/package.json /app/bun.lock ./
 
 # Install only production dependencies using the locked versions
-RUN bun install --production --no-optional
+RUN bun install --production --no-optional --frozen-lockfile
 
 # Copy the built application (dist directory) from the builder stage
 COPY --from=builder /app/dist ./
@@ -53,9 +54,12 @@ COPY apps/server/src/db/schema.ts ./src/db/schema.ts
 COPY apps/server/entrypoint.sh .
 RUN chmod +x ./entrypoint.sh
 
+# Set environment variables for better performance
+ENV NODE_ENV=production
+ENV BUN_ENV=production
+
 # Expose the application port
 EXPOSE 3000
-
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
