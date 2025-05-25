@@ -46,7 +46,8 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
 
       try {
         const subjectDetailsResponse = await octokit.request<Issue | PullRequest>({
-          url: `GET ${notification.subject.url}`,
+          method: 'GET',
+          url: notification.subject.url,
         });
         const subjectData = subjectDetailsResponse.data;
 
