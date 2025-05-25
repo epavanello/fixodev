@@ -4,8 +4,8 @@ import { logger as rootLogger } from '../config/logger';
 import { GitHubApp } from '../github/app';
 import { Octokit } from '@octokit/rest';
 import { cloneRepository, cleanupRepository } from '../git/clone';
-import { createBranch, commitChanges, pushChanges } from '../git/operations';
-import { createPullRequest } from '../github/pr';
+import { createBranch, commitChanges, pushChanges, checkoutBranch } from '../git/operations';
+import { createPullRequest, updatePullRequest } from '../github/pr';
 import { loadBotConfig } from '../utils/yaml';
 import { JobError } from '../utils/error';
 import { envConfig } from '../config/env';
@@ -24,19 +24,27 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     originalRepoName,
     eventIssueNumber,
     eventIssueTitle,
+    eventPullRequestNumber,
+    eventPullRequestHeadRef,
+    eventPullRequestHeadSha,
+    eventPullRequestBaseRef,
     commandToProcess,
     triggeredBy,
   } = job;
+
+  const isPullRequestComment = eventPullRequestNumber !== undefined;
+  const eventNumber = eventPullRequestNumber || eventIssueNumber;
+  const eventTitle = eventPullRequestNumber ? `PR #${eventPullRequestNumber}` : eventIssueTitle;
 
   const logger = handlerLogger.child({
     jobId,
     jobType: job.type,
     repo: `${originalRepoOwner}/${originalRepoName}`,
-    issue: eventIssueNumber,
+    event: eventNumber,
     triggeredBy,
   });
 
-  logger.info('Starting MentionOnIssueJob handling.');
+  logger.info(`Starting MentionOn${isPullRequestComment ? 'PullRequest' : 'Issue'}Job handling.`);
 
   // Initialize rate limit manager
   const rateLimitManager = new RateLimitManager(db);
@@ -46,6 +54,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
   let cloneToken: string | undefined;
   let repositoryToCloneUrl: string;
   let headBranchOwner: string = originalRepoOwner;
+  let branchToPushTo: string;
 
   if (isAppMentionJob(job)) {
     logger.info('Job identified as AppMention. Setting up GitHub App authentication.');
@@ -81,6 +90,20 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     );
   } else {
     throw new JobError(`Unknown job type for job ID ${jobId}`);
+  }
+
+  // Determine the branch to work on
+  if (isPullRequestComment) {
+    // For PR comments, work on the PR's head branch
+    if (!eventPullRequestHeadRef) {
+      throw new JobError('eventPullRequestHeadRef is missing for a PR comment job.');
+    }
+    branchToPushTo = eventPullRequestHeadRef;
+    logger.info(`Working on existing PR branch: ${branchToPushTo}`);
+  } else {
+    // For issue mentions, create a new branch
+    branchToPushTo = `${envConfig.BOT_NAME}/${eventIssueNumber}-${Date.now().toString().slice(-6)}`;
+    logger.info(`Creating new branch for issue: ${branchToPushTo}`);
   }
 
   // Check rate limits for both triggeredBy and repoOwner
@@ -121,7 +144,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
       await octokit.issues.createComment({
         owner: originalRepoOwner,
         repo: originalRepoName,
-        issue_number: eventIssueNumber,
+        issue_number: eventNumber as number, // Use eventNumber for comments
         body: rateLimitMessage,
       });
       logger.info(
@@ -145,8 +168,8 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     const initialComment = await octokit.issues.createComment({
       owner: originalRepoOwner,
       repo: originalRepoName,
-      issue_number: eventIssueNumber,
-      body: `👋 Hi @${triggeredBy}, I'm on it! I'll apply changes, and open a PR if needed. Stay tuned!`,
+      issue_number: eventNumber as number, // Use eventNumber for comments
+      body: `👋 Hi @${triggeredBy}, I'm on it! I'll apply changes, and ${isPullRequestComment ? 'update the PR' : 'open a PR if needed'}. Stay tuned!`,
     });
     initialCommentId = initialComment.data.id;
     logger.info('Posted acknowledgment comment.');
@@ -168,9 +191,15 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     const botConfig = (await loadBotConfig(repoPath)) as BotConfig;
     logger.info({ botConfig }, 'Loaded bot configuration.');
 
-    const branchName = `${envConfig.BOT_NAME}/${eventIssueNumber}-${Date.now().toString().slice(-6)}`;
-    await createBranch(git, branchName);
-    logger.info({ branchName }, 'Created new branch.');
+    if (isPullRequestComment) {
+      // Checkout the PR's head branch
+      await checkoutBranch(git, branchToPushTo);
+      logger.info({ branchToPushTo }, 'Checked out existing PR branch.');
+    } else {
+      // Create a new branch for issue mentions
+      await createBranch(git, branchToPushTo);
+      logger.info({ branchToPushTo }, 'Created new branch for issue.');
+    }
 
     const modificationResult = await processCodeModificationRequest(
       commandToProcess,
@@ -191,25 +220,42 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     let prUrl: string | undefined;
     if (hasPendingChanges && modificationResult?.objectiveAchieved) {
       logger.info('Committing and pushing changes.');
-      const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber} by @${envConfig.BOT_NAME}`;
+      const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventNumber} by @${envConfig.BOT_NAME}`;
 
       await commitChanges(git, commitMessage);
-      await pushChanges(git, branchName);
+      await pushChanges(git, branchToPushTo);
       logger.info('Changes committed and pushed.');
 
-      const pr = await createPullRequest(octokit, {
-        owner: originalRepoOwner,
-        repo: originalRepoName,
-        title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by @${envConfig.BOT_NAME}`,
-        head: `${headBranchOwner}:${branchName}`,
-        base: botConfig.branches.target || 'main',
-        body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
-        labels: ['bot', envConfig.BOT_NAME.toLowerCase()],
-      });
-      prUrl = pr;
-      logger.info({ prUrl }, 'Pull request created successfully.');
+      if (isPullRequestComment) {
+        // Update existing PR
+        if (!eventPullRequestNumber) {
+          throw new JobError('eventPullRequestNumber is missing for updating a PR.');
+        }
+        prUrl = await updatePullRequest(octokit, {
+          owner: originalRepoOwner,
+          repo: originalRepoName,
+          pull_number: eventPullRequestNumber,
+          body: `This PR has been updated by @${envConfig.BOT_NAME} based on your comment.\n\nTriggered by: @${triggeredBy}`,
+        });
+        logger.info({ prUrl }, 'Pull request updated successfully.');
+      } else {
+        // Create new PR for issue mention
+        if (!eventIssueTitle) {
+          throw new JobError('eventIssueTitle is missing for creating a PR from an issue.');
+        }
+        prUrl = await createPullRequest(octokit, {
+          owner: originalRepoOwner,
+          repo: originalRepoName,
+          title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by @${envConfig.BOT_NAME}`,
+          head: `${headBranchOwner}:${branchToPushTo}`,
+          base: botConfig.branches.target || 'main',
+          body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
+          labels: ['bot', envConfig.BOT_NAME.toLowerCase()],
+        });
+        logger.info({ prUrl }, 'Pull request created successfully.');
+      }
     } else {
-      logger.info('No changes to commit. Skipping PR creation.');
+      logger.info('No changes to commit. Skipping PR creation/update.');
     }
 
     if (initialCommentId) {
@@ -223,7 +269,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
 
     let replyMessage: string;
     if (prUrl) {
-      replyMessage = `✅ @${triggeredBy}, I've created a pull request for you: ${prUrl}`;
+      replyMessage = `✅ @${triggeredBy}, I've ${isPullRequestComment ? 'updated the pull request' : 'created a pull request'} for you: ${prUrl}`;
     } else {
       replyMessage = `✅ @${triggeredBy}, I received your request, but no actionable changes were identified or no changes were necessary after running checks.`;
       logger.info('Replying that no changes were made or command was not actionable.');
@@ -231,13 +277,13 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     await octokit.issues.createComment({
       owner: originalRepoOwner,
       repo: originalRepoName,
-      issue_number: eventIssueNumber,
+      issue_number: eventNumber as number, // Use eventNumber for comments
       body: replyMessage,
     });
     logger.info('Posted final reply comment.');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error({ error }, 'MentionOnIssueJob handling failed.');
+    logger.error({ error }, `MentionOn${isPullRequestComment ? 'PullRequest' : 'Issue'}Job handling failed.`);
 
     if (initialCommentId) {
       try {
@@ -256,17 +302,17 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
       await octokit.issues.createComment({
         owner: originalRepoOwner,
         repo: originalRepoName,
-        issue_number: eventIssueNumber,
+        issue_number: eventNumber as number, // Use eventNumber for comments
         body: `🚧 Oops, @${triggeredBy}! I encountered an error while working on your request.\n\n\`\`\`\n${errorMessage}\n\`\`\`\n\nPlease check the logs if you have access.`,
       });
     } catch (commentError) {
-      logger.error({ commentError }, 'Failed to post error comment to GitHub issue.');
+      logger.error({ commentError }, 'Failed to post error comment to GitHub issue/PR.');
     }
 
     if (error instanceof JobError) {
       throw error;
     }
-    throw new JobError(`Failed to handle MentionOnIssueJob ${jobId}: ${errorMessage}`);
+    throw new JobError(`Failed to handle MentionOn${isPullRequestComment ? 'PullRequest' : 'Issue'}Job ${jobId}: ${errorMessage}`);
   } finally {
     if (repoPath && envConfig.CLEANUP_REPOSITORIES) {
       try {
@@ -276,6 +322,6 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
         logger.error({ repoPath, error: cleanupError }, 'Failed to cleanup cloned repository.');
       }
     }
-    logger.info('Finished MentionOnIssueJob handling.');
+    logger.info(`Finished MentionOn${isPullRequestComment ? 'PullRequest' : 'Issue'}Job handling.`);
   }
 }

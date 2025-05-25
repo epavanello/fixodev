@@ -29,6 +29,22 @@ export const createBranch = async (git: SimpleGit, branchName: string): Promise<
 };
 
 /**
+ * Checkout an existing branch
+ */
+export const checkoutBranch = async (git: SimpleGit, branchName: string): Promise<void> => {
+  try {
+    logger.info({ branchName }, 'Checking out branch');
+    await git.checkout(branchName);
+    logger.info({ branchName }, 'Branch checked out successfully');
+  } catch (error) {
+    logger.error({ branchName, error }, 'Failed to checkout branch');
+    throw new GitHubError(
+      `Failed to checkout branch: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+
+/**
  * Stage and commit changes
  */
 export const commitChanges = async (git: SimpleGit, message: string): Promise<void> => {

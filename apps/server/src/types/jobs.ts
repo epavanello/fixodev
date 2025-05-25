@@ -2,8 +2,12 @@ interface BaseJob {
   id: string; // Unique job ID, typically from queue or delivery ID
   originalRepoOwner: string;
   originalRepoName: string;
-  eventIssueNumber: number;
-  eventIssueTitle: string;
+  eventIssueNumber?: number; // Optional for PR comments
+  eventIssueTitle?: string; // Optional for PR comments
+  eventPullRequestNumber?: number; // New: Optional for PR comments
+  eventPullRequestHeadRef?: string; // New: Optional for PR comments
+  eventPullRequestHeadSha?: string; // New: Optional for PR comments
+  eventPullRequestBaseRef?: string; // New: Optional for PR comments
 }
 
 /**
