@@ -23,10 +23,10 @@
 	</div>
 	<!-- Placeholder for issue preview -->
 	<div class="bg-surface w-full max-w-lg space-y-4 rounded-2xl border border-gray-800 p-6">
-		<h3 class="text-xl font-semibold">Issue #42: Typo in README</h3>
+		<h3 class="text-xl font-semibold">Issue #78: Implement Dark Mode Toggle</h3>
 		<p class="text-sm text-gray-400">opened by <span class="text-primary">@fixodev</span></p>
 		<p class="bg-background border-accent rounded-lg border-l-4 p-4 italic">
-			There's a typo in the installation instructions: "npm isntall" => "npm install".
+			Add a dark mode toggle to the user interface, persisting the preference in local storage.
 		</p>
 		<div class="text-right">
 			<span
