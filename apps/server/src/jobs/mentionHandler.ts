@@ -203,7 +203,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
         title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by @${envConfig.BOT_NAME}`,
         head: `${headBranchOwner}:${branchName}`,
         base: botConfig.branches.target || 'main',
-        body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
+        body: `This PR addresses the mention of ${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
         labels: ['bot', envConfig.BOT_NAME.toLowerCase()],
       });
       prUrl = pr;
