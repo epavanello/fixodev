@@ -66,13 +66,13 @@ We believe that:
 
 ### 🎬 **See It In Action**
 
-<div align="center">
-
-[![Video Preview](/docs/demo-preview.png)](/docs/demo%20fixo.mp4)
-
-_Watch FixO Dev Bot in action - from mention to pull request in minutes!_
+<div align="center">   
+   
+https://github.com/user-attachments/assets/bda78cae-e068-49cc-8a0a-562d35f14b25
 
 </div>
+
+_Watch FixO Dev Bot in action - from mention to pull request in minutes!_
 
 ```bash
 # 1. Mention @fixodev in any GitHub issue or PR comment
