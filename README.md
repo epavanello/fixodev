@@ -68,9 +68,7 @@ We believe that:
 
 <div align="center">
 
-<video width="100%" controls>
-  <source src="docs/demo fixo.mp4" type="video/mp4">
-</video>
+[![Video Preview](/docs/demo-preview.png)](/docs/demo%20fixo.mp4)
 
 _Watch FixO Dev Bot in action - from mention to pull request in minutes!_
 
@@ -81,7 +79,7 @@ _Watch FixO Dev Bot in action - from mention to pull request in minutes!_
 # 2. Watch the magic happen!
 
 # Example: In a GitHub issue
-"Hey @fixodev, can you fix the linting errors in src/components/?"
+"Hey @fixodev, can you refactor the code to use the new API?"
 
 # Result: Professional PR with fixes in minutes ✨
 ```
