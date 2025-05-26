@@ -1,4 +1,4 @@
-import { SimpleGit } from 'simple-git';
+import { SimpleGit, simpleGit } from 'simple-git';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { envConfig } from '../config/env';
@@ -24,6 +24,38 @@ export const createBranch = async (git: SimpleGit, branchName: string): Promise<
     logger.error({ branchName, error }, 'Failed to create branch');
     throw new GitHubError(
       `Failed to create branch: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+
+/**
+ * Checkout a remote branch by name or SHA.
+ */
+export const checkoutRemoteBranch = async (
+  repoPath: string,
+  ref: string,
+  sha?: string,
+): Promise<void> => {
+  const git = simpleGit(repoPath);
+  try {
+    logger.info({ repoPath, ref, sha }, 'Checking out remote branch/ref');
+
+    // Fetch all remote branches to ensure the ref is available locally
+    await git.fetch('origin');
+
+    // If a SHA is provided, try to checkout that specific commit
+    if (sha) {
+      await git.checkout(sha);
+      logger.info({ repoPath, sha }, 'Checked out specific commit SHA');
+    } else {
+      // Otherwise, checkout the branch directly
+      await git.checkout(ref);
+      logger.info({ repoPath, ref }, 'Checked out remote branch');
+    }
+  } catch (error) {
+    logger.error({ repoPath, ref, sha, error }, 'Failed to checkout remote branch/ref');
+    throw new GitHubError(
+      `Failed to checkout remote branch/ref ${ref}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 };

@@ -1,6 +1,8 @@
 import { Octokit } from '@octokit/rest';
 import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
+import { getOctokitInstance } from './app';
+
 interface CreatePRParams {
   owner: string;
   repo: string;
@@ -89,6 +91,63 @@ export const createPullRequest = async (
     );
     throw new GitHubError(
       `Failed to create pull request: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+
+/**
+ * Add a comment to a pull request review comment.
+ */
+export const addCommentToPullRequest = async (
+  owner: string,
+  repo: string,
+  pull_number: number,
+  comment_id: number,
+  body: string,
+  installationId: number,
+): Promise<void> => {
+  try {
+    const octokit = await getOctokitInstance(installationId);
+    logger.info(
+      {
+        owner,
+        repo,
+        pull_number,
+        comment_id,
+      },
+      'Adding comment to pull request review comment',
+    );
+
+    await octokit.pulls.createReviewComment({
+      owner,
+      repo,
+      pull_number,
+      comment_id,
+      body,
+    });
+
+    logger.info(
+      {
+        owner,
+        repo,
+        pull_number,
+        comment_id,
+      },
+      'Comment added to pull request review comment successfully',
+    );
+  } catch (error) {
+    logger.error(
+      {
+        owner,
+        repo,
+        pull_number,
+        comment_id,
+        error,
+      },
+      'Failed to add comment to pull request review comment',
+    );
+    throw new GitHubError(
+      `Failed to add comment to pull request review comment: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 };

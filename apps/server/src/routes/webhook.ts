@@ -3,9 +3,9 @@ import { logger } from '../config/logger';
 import { jobQueue } from '../queue';
 import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
-import { AppMentionOnIssueJob } from '../types/jobs';
+import { AppMentionOnIssueJob, AppMentionOnPullRequestJob, JobType } from '../types/jobs';
 import { WebhookEventName, WebhookEvent as OctokitWebhookEvent } from '@octokit/webhooks-types';
-import { isIssueCommentEvent, isIssueEvent } from '@/types/guards';
+import { isIssueCommentEvent, isIssueEvent, isPullRequestReviewCommentEvent } from '@/types/guards';
 
 const BOT_MENTION = `@${envConfig.BOT_NAME}`.toLowerCase();
 
@@ -62,12 +62,21 @@ router.post('/github', async c => {
     let commandToProcess: string | undefined;
     let issueNumber: number | undefined;
     let issueTitle: string | undefined;
+    let pullRequestNumber: number | undefined;
+    let pullRequestTitle: string | undefined;
+    let pullRequestUrl: string | undefined;
+    let headRef: string | undefined;
+    let headSha: string | undefined;
+    let baseRef: string | undefined;
+    let baseSha: string | undefined;
+    let commentId: number | undefined;
     let repoOwner: string | undefined;
     let repoName: string | undefined;
     let repositoryUrl: string | undefined;
     let installationId: number | undefined;
     let senderLogin: string | undefined;
     let shouldProcessEvent = false;
+    let jobType: JobType | undefined;
 
     if (eventName === 'issues' && isIssueEvent(payload) && payload.action === 'opened') {
       const issuePayload = payload;
@@ -82,6 +91,7 @@ router.post('/github', async c => {
         installationId = issuePayload.installation?.id;
         senderLogin = issuePayload.sender.login;
         shouldProcessEvent = true;
+        jobType = JobType.AppMention;
         logger.info(
           { deliveryId, eventName, repo: `${repoOwner}/${repoName}`, issue: issueNumber },
           'Processing mention from new issue',
@@ -125,9 +135,60 @@ router.post('/github', async c => {
         installationId = commentPayload.installation?.id;
         senderLogin = commentPayload.sender.login;
         shouldProcessEvent = true;
+        jobType = JobType.AppMention;
         logger.info(
           { deliveryId, eventName, repo: `${repoOwner}/${repoName}`, issue: issueNumber },
           'Processing mention from issue comment',
+        );
+      }
+    } else if (
+      eventName === 'pull_request_review_comment' &&
+      isPullRequestReviewCommentEvent(payload) &&
+      payload.action === 'created'
+    ) {
+      const prCommentPayload = payload;
+      // Ensure it's not a comment made by the bot itself to avoid loops
+      if (
+        prCommentPayload.sender.login.toLowerCase() === envConfig.BOT_NAME.toLowerCase() ||
+        prCommentPayload.sender.login.toLowerCase() === `${envConfig.BOT_NAME}[bot]`.toLowerCase()
+      ) {
+        logger.info(
+          {
+            deliveryId,
+            eventName,
+            repo: `${prCommentPayload.repository.owner.login}/${prCommentPayload.repository.name}`,
+            pull_request: prCommentPayload.pull_request.number,
+          },
+          'Skipping comment from bot itself.',
+        );
+        return c.json({
+          success: true,
+          processed: false,
+          message: 'Skipping comment from bot itself.',
+        });
+      }
+
+      const { shouldProcess, command } = getBotCommandFromPayload(prCommentPayload.comment.body);
+      if (shouldProcess && command) {
+        commandToProcess = command;
+        pullRequestNumber = prCommentPayload.pull_request.number;
+        pullRequestTitle = prCommentPayload.pull_request.title;
+        pullRequestUrl = prCommentPayload.pull_request.url;
+        headRef = prCommentPayload.pull_request.head.ref;
+        headSha = prCommentPayload.pull_request.head.sha;
+        baseRef = prCommentPayload.pull_request.base.ref;
+        baseSha = prCommentPayload.pull_request.base.sha;
+        commentId = prCommentPayload.comment.id;
+        repoOwner = prCommentPayload.repository.owner.login;
+        repoName = prCommentPayload.repository.name;
+        repositoryUrl = prCommentPayload.repository.clone_url;
+        installationId = prCommentPayload.installation?.id;
+        senderLogin = prCommentPayload.sender.login;
+        shouldProcessEvent = true;
+        jobType = JobType.AppMentionOnPullRequest;
+        logger.info(
+          { deliveryId, eventName, repo: `${repoOwner}/${repoName}`, pull_request: pullRequestNumber },
+          'Processing mention from pull request review comment',
         );
       }
     }
@@ -135,34 +196,70 @@ router.post('/github', async c => {
     if (
       shouldProcessEvent &&
       commandToProcess &&
-      issueNumber &&
-      issueTitle &&
       repoOwner &&
       repoName &&
       repositoryUrl &&
       installationId &&
-      senderLogin
+      senderLogin &&
+      jobType
     ) {
-      const jobToQueue: AppMentionOnIssueJob = {
-        id: deliveryId || `app_mention_${Date.now()}`,
-        type: 'app_mention',
-        originalRepoOwner: repoOwner,
-        originalRepoName: repoName,
-        eventIssueNumber: issueNumber,
-        eventIssueTitle: issueTitle,
-        commandToProcess: commandToProcess,
-        triggeredBy: senderLogin,
-        installationId: installationId,
-        repositoryUrl: repositoryUrl,
-      };
+      if (jobType === JobType.AppMention && issueNumber && issueTitle) {
+        const jobToQueue: AppMentionOnIssueJob = {
+          id: deliveryId || `app_mention_${Date.now()}`,
+          type: JobType.AppMention,
+          originalRepoOwner: repoOwner,
+          originalRepoName: repoName,
+          eventIssueNumber: issueNumber,
+          eventIssueTitle: issueTitle,
+          commandToProcess: commandToProcess,
+          triggeredBy: senderLogin,
+          installationId: installationId,
+          repositoryUrl: repositoryUrl,
+        };
+        const queuedJobEntry = await jobQueue.addJob(jobToQueue);
 
-      const queuedJobEntry = await jobQueue.addJob(jobToQueue);
+        logger.info(
+          { jobId: queuedJobEntry.id, eventName, action: eventAction },
+          'AppMentionJob event queued',
+        );
+        return c.json({ success: true, jobId: queuedJobEntry.id });
+      } else if (
+        jobType === JobType.AppMentionOnPullRequest &&
+        pullRequestNumber &&
+        pullRequestTitle &&
+        pullRequestUrl &&
+        headRef &&
+        headSha &&
+        baseRef &&
+        baseSha &&
+        commentId
+      ) {
+        const jobToQueue: AppMentionOnPullRequestJob = {
+          id: deliveryId || `app_mention_pr_${Date.now()}`,
+          type: JobType.AppMentionOnPullRequest,
+          originalRepoOwner: repoOwner,
+          originalRepoName: repoName,
+          eventPullRequestNumber: pullRequestNumber,
+          eventPullRequestTitle: pullRequestTitle,
+          pullRequestUrl: pullRequestUrl,
+          headRef: headRef,
+          headSha: headSha,
+          baseRef: baseRef,
+          baseSha: baseSha,
+          commentId: commentId,
+          commandToProcess: commandToProcess,
+          triggeredBy: senderLogin,
+          installationId: installationId,
+          repositoryUrl: repositoryUrl,
+        };
+        const queuedJobEntry = await jobQueue.addJob(jobToQueue);
 
-      logger.info(
-        { jobId: queuedJobEntry.id, eventName, action: eventAction },
-        'AppMentionJob event queued',
-      );
-      return c.json({ success: true, jobId: queuedJobEntry.id });
+        logger.info(
+          { jobId: queuedJobEntry.id, eventName, action: eventAction },
+          'AppMentionOnPullRequestJob event queued',
+        );
+        return c.json({ success: true, jobId: queuedJobEntry.id });
+      }
     } else {
       logger.info(
         { deliveryId, eventName, action: eventAction },
