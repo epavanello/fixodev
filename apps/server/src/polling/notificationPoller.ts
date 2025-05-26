@@ -4,9 +4,10 @@ import { UserMentionOnIssueJob } from '../types/jobs';
 import { envConfig } from '../config/env';
 import { logger as rootLogger } from '../config/logger';
 import { Issue, PullRequest } from '@octokit/webhooks-types';
+import { getBotCommandFromPayload } from '@/utils/mention';
 
 const POLLER_INTERVAL_MS = 60 * 1000; // 1 minute
-const BOT_USER_MENTION = `@${envConfig.BOT_NAME}`.toLowerCase();
+
 const logger = rootLogger.child({ service: 'NotificationPoller' });
 
 let lastSuccessfulPollTimestamp = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // Start 5 mins ago
@@ -51,13 +52,11 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
         });
         const subjectData = subjectDetailsResponse.data;
 
-        const commandBody = subjectData.body;
-        if (
-          !commandBody ||
-          !commandBody.toLowerCase().includes(BOT_USER_MENTION) ||
-          subjectData.user?.login.toLowerCase() === `${envConfig.BOT_NAME.toLowerCase()}` ||
-          subjectData.user?.login.toLowerCase() === `${envConfig.BOT_NAME.toLowerCase()}[bot]`
-        ) {
+        const { shouldProcess, command } = getBotCommandFromPayload(
+          subjectData.body,
+          subjectData.user?.login,
+        );
+        if (!shouldProcess) {
           // Mark as read even if not a command for us, to clear notification
           await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
           continue;
@@ -87,7 +86,7 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           eventIssueNumber: eventIssueNumber,
           eventIssueTitle:
             notification.subject.title || `Mention in ${notification.repository.full_name}`,
-          commandToProcess: commandBody,
+          commandToProcess: command,
           triggeredBy: subjectData.user?.login || 'unknown_user',
         };
 

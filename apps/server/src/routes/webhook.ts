@@ -6,8 +6,7 @@ import { envConfig } from '../config/env';
 import { AppMentionOnIssueJob } from '../types/jobs';
 import { WebhookEventName, WebhookEvent as OctokitWebhookEvent } from '@octokit/webhooks-types';
 import { isIssueCommentEvent, isIssueEvent } from '@/types/guards';
-
-const BOT_MENTION = `@${envConfig.BOT_NAME}`.toLowerCase();
+import { getBotCommandFromPayload } from '@/utils/mention';
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
@@ -15,22 +14,6 @@ const webhooks = new Webhooks({
 });
 
 const router = new Hono();
-
-/**
- * Checks if the bot is mentioned in the body and extracts the command.
- */
-function getBotCommandFromPayload(body: string | null | undefined): {
-  shouldProcess: boolean;
-  command?: string;
-} {
-  if (!body) {
-    return { shouldProcess: false };
-  }
-  if (body.toLowerCase().includes(BOT_MENTION)) {
-    return { shouldProcess: true, command: body };
-  }
-  return { shouldProcess: false };
-}
 
 router.post('/github', async c => {
   try {
@@ -71,8 +54,11 @@ router.post('/github', async c => {
 
     if (eventName === 'issues' && isIssueEvent(payload) && payload.action === 'opened') {
       const issuePayload = payload;
-      const { shouldProcess, command } = getBotCommandFromPayload(issuePayload.issue.body);
-      if (shouldProcess && command) {
+      const { shouldProcess, command } = getBotCommandFromPayload(
+        issuePayload.issue.body,
+        issuePayload.sender.login,
+      );
+      if (shouldProcess) {
         commandToProcess = command;
         issueNumber = issuePayload.issue.number;
         issueTitle = issuePayload.issue.title;
@@ -93,29 +79,12 @@ router.post('/github', async c => {
       payload.action === 'created'
     ) {
       const commentPayload = payload;
-      // Ensure it's not a comment made by the bot itself to avoid loops
-      if (
-        commentPayload.sender.login.toLowerCase() === envConfig.BOT_NAME.toLowerCase() ||
-        commentPayload.sender.login.toLowerCase() === `${envConfig.BOT_NAME}[bot]`.toLowerCase()
-      ) {
-        logger.info(
-          {
-            deliveryId,
-            eventName,
-            repo: `${commentPayload.repository.owner.login}/${commentPayload.repository.name}`,
-            issue: commentPayload.issue.number,
-          },
-          'Skipping comment from bot itself.',
-        );
-        return c.json({
-          success: true,
-          processed: false,
-          message: 'Skipping comment from bot itself.',
-        });
-      }
 
-      const { shouldProcess, command } = getBotCommandFromPayload(commentPayload.comment.body);
-      if (shouldProcess && command) {
+      const { shouldProcess, command } = getBotCommandFromPayload(
+        commentPayload.comment.body,
+        commentPayload.sender.login,
+      );
+      if (shouldProcess) {
         commandToProcess = command;
         issueNumber = commentPayload.issue.number;
         issueTitle = commentPayload.issue.title;

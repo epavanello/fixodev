@@ -16,7 +16,7 @@ const envSchema = z.object({
   GIT_BOT_EMAIL: z.string().default('bot@fixo.dev'),
   BOT_NAME: z
     .string()
-    .default('FixO Dev')
+    .default('fixodev')
     .transform(val => val.replace(/[^a-zA-Z0-9_.-]/g, '-')),
 
   // OpenAI
