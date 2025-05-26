@@ -43,7 +43,7 @@ A GitHub App-based bot that automates code fixes and improvements through AI.
 - **GitHub App Server**: Built on Bun HTTP server, handling webhooks and app authentication using JWT, with endpoints for events like `issue_comment`, `pull_request`, and `push`.
 - **Queue System**: In-memory FIFO queue with persistence to disk, designed for effective job status tracking and retry mechanisms.
 - **Docker Orchestration**: Executes scripts in isolated containers using `dockerode`, ensuring secure execution with network isolation and resource limits.
-- **LLM Integration**: Uses OpenAI's API for code analysis and auto-fixing, employing systematic prompt templates for task-specific queries.
+- **LLM Integration**: Uses OpenAI\'s API for code analysis and auto-fixing, employing systematic prompt templates for task-specific queries.
 - **Git Operations**: Manages repository cloning, branch creation, commit, and PR actions via GitHub API.
 
 ## Deployment Strategies
@@ -99,3 +99,5 @@ bun run start
 ## License
 
 Business Source License 1.1 (BSL 1.1)
+
+Built with ❤️ by @epavanello and the community
