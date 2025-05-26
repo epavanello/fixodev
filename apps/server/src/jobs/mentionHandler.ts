@@ -191,7 +191,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
     let prUrl: string | undefined;
     if (hasPendingChanges && modificationResult?.objectiveAchieved) {
       logger.info('Committing and pushing changes.');
-      const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber} by @${envConfig.BOT_NAME}`;
+      const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber} by ${envConfig.BOT_NAME}`;
 
       await commitChanges(git, commitMessage);
       await pushChanges(git, branchName);
@@ -200,7 +200,7 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
       const pr = await createPullRequest(octokit, {
         owner: originalRepoOwner,
         repo: originalRepoName,
-        title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by @${envConfig.BOT_NAME}`,
+        title: `🤖 Fix for "${eventIssueTitle.slice(0, 40)}${eventIssueTitle.length > 40 ? '...' : ''}" by ${envConfig.BOT_NAME}`,
         head: `${headBranchOwner}:${branchName}`,
         base: botConfig.branches.target || 'main',
         body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
