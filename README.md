@@ -350,7 +350,7 @@ This project is licensed under the **Business Source License 1.1 (BSL-1.1)**.
 
 <div align="center">
 
-**Built with ❤️ by the FixO Dev Bot community**
+**Built with ❤️ by @epavanello and the community**
 
 _Making high-quality code accessible to everyone, one pull request at a time._
 
