@@ -38,6 +38,12 @@ export async function handleMentionOnIssueJob(job: WorkerJob): Promise<void> {
 
   logger.info('Starting MentionOnIssueJob handling.');
 
+  // If the bot itself triggered the mention, ignore it to prevent loops
+  if (triggeredBy === envConfig.BOT_NAME) {
+    logger.info(`Self-mention detected from @${triggeredBy}. Ignoring job.`);
+    return;
+  }
+
   // Initialize rate limit manager
   const rateLimitManager = new RateLimitManager(db);
 
