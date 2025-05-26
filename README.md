@@ -99,3 +99,5 @@ bun run start
 ## License
 
 Business Source License 1.1 (BSL 1.1)
+
+Built with ❤️ by @epavanello and the community
