@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug App",
+      "program": "${workspaceFolder}/apps/server/src/app.ts",
+      "cwd": "${workspaceFolder}/apps/server",
+      "stopOnEntry": false,
+      "watchMode": false
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug CLI",
+      "program": "${workspaceFolder}/apps/server/src/cli.ts",
+      "cwd": "${workspaceFolder}/apps/server",
+      "args": [
+        //"nei sorgenti hai un tool chiamato listDirectory, trova il suo sorgente e modifica quello per far si che restituisca anche il numero di righe per ogni file"
+        //"mi fai un riassunto di cosa fanno i sorgenti sotto docker?"
+        //"mi fai il riassunto di come viene gestita la coda?"
+        // "c'è un elenco di tool selezionabili, che al ri-caricamento della pagina vengono persi come selezione. invece la selezione del modello è persistita su localstorage, fai lo stesso anche per i tools"
+        "implementa il salvataggio su db dei custom tools creati dall'utente"
+      ],
+      "stopOnEntry": false,
+      "watchMode": false,
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "type": "bun",
+      "request": "attach",
+      "name": "Attach to Bun",
+      "url": "ws://localhost:6499/"
+    }
+  ]
+}
