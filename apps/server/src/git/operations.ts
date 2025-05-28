@@ -1,85 +1,81 @@
 import { SimpleGit } from 'simple-git';
-import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
+import { defaultLogger } from '../utils/logger';
 import { envConfig } from '../config/env';
+
+const gitLogger = defaultLogger.child({ module: 'git-operations' });
 
 /**
  * Create a new branch and switch to it
  */
 export const createBranch = async (git: SimpleGit, branchName: string): Promise<void> => {
-  try {
-    logger.info({ branchName }, 'Creating new branch');
+  const operationLogger = gitLogger.child({ operation: 'create-branch', branchName });
 
-    // Check if branch already exists
-    const branches = await git.branch();
-    if (branches.all.includes(branchName)) {
-      throw new GitHubError(`Branch ${branchName} already exists`);
-    }
+  // Check if branch already exists
+  const branches = await operationLogger.execute(() => git.branch(), 'get branch list');
 
-    // Create and checkout new branch
-    await git.checkoutLocalBranch(branchName);
-
-    logger.info({ branchName }, 'Branch created successfully');
-  } catch (error) {
-    logger.error({ branchName, error }, 'Failed to create branch');
-    throw new GitHubError(
-      `Failed to create branch: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  if (branches.all.includes(branchName)) {
+    throw new GitHubError(`Branch ${branchName} already exists`);
   }
+
+  // Create and checkout new branch
+  await operationLogger.execute(
+    () => git.checkoutLocalBranch(branchName),
+    'create and checkout branch',
+  );
 };
 
 /**
  * Stage and commit changes
  */
 export const commitChanges = async (git: SimpleGit, message: string): Promise<void> => {
-  try {
-    logger.info('Committing changes');
+  const operationLogger = gitLogger.child({ operation: 'commit-changes', commitMessage: message });
 
-    // Configure Git identity for the GitHub App
-    await git.addConfig('user.name', envConfig.GIT_BOT_USERNAME);
-    await git.addConfig('user.email', envConfig.GIT_BOT_EMAIL);
+  // Configure Git identity for the GitHub App
+  await operationLogger.execute(
+    () => git.addConfig('user.name', envConfig.GIT_BOT_USERNAME),
+    'configure git username',
+    { username: envConfig.GIT_BOT_USERNAME },
+  );
 
-    // Stage all changes
-    await git.add('.');
+  await operationLogger.execute(
+    () => git.addConfig('user.email', envConfig.GIT_BOT_EMAIL),
+    'configure git email',
+    { email: envConfig.GIT_BOT_EMAIL },
+  );
 
-    // Check if there are any changes to commit
-    const status = await git.status();
-    if (
-      status.modified.length === 0 &&
-      status.created.length === 0 &&
-      status.deleted.length === 0
-    ) {
-      logger.info('No changes to commit');
-      return;
-    }
+  // Stage all changes
+  await operationLogger.execute(() => git.add('.'), 'stage all changes');
 
-    // Commit changes
-    await git.commit(message);
+  // Check if there are any changes to commit
+  const status = await operationLogger.execute(() => git.status(), 'check git status');
 
-    logger.info('Changes committed successfully');
-  } catch (error) {
-    logger.error({ error }, 'Failed to commit changes');
-    throw new GitHubError(
-      `Failed to commit changes: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  if (status.modified.length === 0 && status.created.length === 0 && status.deleted.length === 0) {
+    operationLogger.info('No changes to commit', {
+      modified: status.modified.length,
+      created: status.created.length,
+      deleted: status.deleted.length,
+    });
+    return;
   }
+
+  // Commit changes
+  await operationLogger.execute(() => git.commit(message), 'commit changes', {
+    changesCount: status.modified.length + status.created.length + status.deleted.length,
+    modified: status.modified.length,
+    created: status.created.length,
+    deleted: status.deleted.length,
+  });
 };
 
 /**
  * Push changes to remote repository
  */
 export const pushChanges = async (git: SimpleGit, branchName: string): Promise<void> => {
-  try {
-    logger.info({ branchName }, 'Pushing changes');
+  const operationLogger = gitLogger.child({ operation: 'push-changes', branchName });
 
-    // Push to remote
-    await git.push('origin', branchName);
-
-    logger.info({ branchName }, 'Changes pushed successfully');
-  } catch (error) {
-    logger.error({ branchName, error }, 'Failed to push changes');
-    throw new GitHubError(
-      `Failed to push changes: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
+  // Push to remote
+  await operationLogger.execute(() => git.push('origin', branchName), 'push changes to remote', {
+    remote: 'origin',
+  });
 };

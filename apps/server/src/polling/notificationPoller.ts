@@ -1,10 +1,10 @@
 import { Octokit } from '@octokit/rest';
 import { jobQueue } from '../queue';
-import { UserMentionOnIssueJob } from '../types/jobs';
 import { envConfig } from '../config/env';
 import { logger as rootLogger } from '../config/logger';
-import { Issue, PullRequest } from '@octokit/webhooks-types';
-import { getBotCommandFromPayload } from '@/utils/mention';
+import { Issue } from '@octokit/webhooks-types';
+import { isBotMentioned } from '@/utils/mention';
+import { IssueToPrJob } from '@/types/jobs';
 
 const POLLER_INTERVAL_MS = 60 * 1000; // 1 minute
 
@@ -38,7 +38,9 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
       if (
         notification.reason !== 'mention' ||
         !notification.subject ||
+        notification.subject.type !== 'Issue' ||
         !notification.repository ||
+        // must have app installed
         notification.repository.private
       ) {
         await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
@@ -46,30 +48,20 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
       }
 
       try {
-        const subjectDetailsResponse = await octokit.request<Issue | PullRequest>({
+        const issueResponse = await octokit.request<Issue>({
           method: 'GET',
           url: notification.subject.url,
         });
-        const subjectData = subjectDetailsResponse.data;
+        const issue = issueResponse.data;
 
-        const { shouldProcess, command } = getBotCommandFromPayload(
-          subjectData.body,
-          subjectData.user?.login,
-        );
+        const shouldProcess = isBotMentioned(issue.body, issue.user?.login);
         if (!shouldProcess) {
           // Mark as read even if not a command for us, to clear notification
           await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
           continue;
         }
 
-        let eventIssueNumber: number | undefined;
-        if (notification.subject.type === 'Issue') {
-          eventIssueNumber = subjectData.number;
-        } else if (notification.subject.type === 'PullRequest') {
-          eventIssueNumber = subjectData.number;
-        }
-
-        if (!eventIssueNumber || isNaN(eventIssueNumber)) {
+        if (!issue.number || isNaN(issue.number)) {
           logger.error(
             { notificationId: notification.id, subjectUrl: notification.subject.url },
             'Could not determine issue/PR number from notification.',
@@ -78,16 +70,15 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           continue;
         }
 
-        const userMentionJob: UserMentionOnIssueJob = {
+        const userMentionJob: IssueToPrJob = {
+          type: 'issue_to_pr',
           id: `user_mention_${notification.id}_${Date.now()}`,
-          type: 'user_mention',
-          originalRepoOwner: notification.repository.owner.login,
-          originalRepoName: notification.repository.name,
-          eventIssueNumber: eventIssueNumber,
-          eventIssueTitle:
-            notification.subject.title || `Mention in ${notification.repository.full_name}`,
-          commandToProcess: command,
-          triggeredBy: subjectData.user?.login || 'unknown_user',
+          repoOwner: notification.repository.owner.login,
+          repoName: notification.repository.name,
+          issueNumber: issue.number,
+          issue: issue,
+          triggeredBy: issue.user?.login || 'unknown_user',
+          repoUrl: notification.repository.html_url,
         };
 
         await jobQueue.addJob(userMentionJob);
@@ -95,7 +86,7 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           {
             jobId: userMentionJob.id,
             repo: notification.repository.full_name,
-            issue: eventIssueNumber,
+            issue: issue.number,
           },
           'UserMentionJob queued.',
         );

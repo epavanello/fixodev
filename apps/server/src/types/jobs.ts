@@ -1,47 +1,32 @@
+import { Issue } from '@octokit/webhooks-types';
+
 interface BaseJob {
-  id: string; // Unique job ID, typically from queue or delivery ID
-  originalRepoOwner: string;
-  originalRepoName: string;
-  eventIssueNumber: number;
-  eventIssueTitle: string;
+  id: string;
+  repoOwner: string;
+  repoName: string;
+  repoUrl: string;
+  testJob?: boolean;
 }
 
 /**
- * Common properties for all jobs processed by the worker.
+ * Job triggered on a issue
  */
-interface BaseMentionOnIssueJob extends BaseJob {
-  commandToProcess: string;
+export interface IssueToPrJob extends BaseJob {
+  issueNumber: number;
   triggeredBy: string;
-}
-
-/**
- * Job triggered by a GitHub App mention (issue or issue_comment).
- */
-export interface AppMentionOnIssueJob extends BaseMentionOnIssueJob {
-  type: 'app_mention';
-  installationId: number;
-  repositoryUrl: string;
-}
-
-/**
- * Job triggered by a mention of the dedicated GitHub User (@BOT_NAME).
- */
-export interface UserMentionOnIssueJob extends BaseMentionOnIssueJob {
-  type: 'user_mention';
+  type: 'issue_to_pr';
+  issue: Issue;
+  installationId?: number;
 }
 
 /**
  * Union type for all possible jobs in the queue.
  */
-export type QueuedJob = AppMentionOnIssueJob | UserMentionOnIssueJob;
+export type QueuedJob = IssueToPrJob;
 
 // Type Guards
-export function isAppMentionJob(job: QueuedJob): job is AppMentionOnIssueJob {
-  return job.type === 'app_mention';
-}
-
-export function isUserMentionJob(job: QueuedJob): job is UserMentionOnIssueJob {
-  return job.type === 'user_mention';
+export function isIssueToPrJob(job: QueuedJob): job is IssueToPrJob {
+  return job.type === 'issue_to_pr';
 }
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';

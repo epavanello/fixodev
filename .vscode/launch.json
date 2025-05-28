@@ -16,12 +16,22 @@
       "name": "Debug CLI",
       "program": "${workspaceFolder}/apps/server/src/cli.ts",
       "cwd": "${workspaceFolder}/apps/server",
+      "args": [],
+      "stopOnEntry": false,
+      "watchMode": false,
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug CLI issue-to-pr",
+      "program": "${workspaceFolder}/apps/server/src/cli.ts",
+      "cwd": "${workspaceFolder}/apps/server",
       "args": [
-        //"nei sorgenti hai un tool chiamato listDirectory, trova il suo sorgente e modifica quello per far si che restituisca anche il numero di righe per ogni file"
-        //"mi fai un riassunto di cosa fanno i sorgenti sotto docker?"
-        //"mi fai il riassunto di come viene gestita la coda?"
-        // "c'è un elenco di tool selezionabili, che al ri-caricamento della pagina vengono persi come selezione. invece la selezione del modello è persistita su localstorage, fai lo stesso anche per i tools"
-        "implementa il salvataggio su db dei custom tools creati dall'utente"
+        "issue-to-pr"
+        //url
       ],
       "stopOnEntry": false,
       "watchMode": false,

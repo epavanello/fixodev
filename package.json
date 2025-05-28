@@ -9,6 +9,7 @@
   "scripts": {
     "dev:server": "bun run --cwd apps/server dev",
     "build:server": "bun run --cwd apps/server build",
+    "cli": "bun run --cwd apps/server cli",
     "dev:web": "bun run --cwd apps/webapp dev",
     "build:web": "bun run --cwd apps/webapp build"
   }

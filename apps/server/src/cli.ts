@@ -1,9 +1,14 @@
 import path from 'path';
 import { Command } from 'commander';
 import readline from 'readline/promises';
+import { Octokit } from '@octokit/rest';
 import { processCodeModificationRequest } from './llm/processor';
 import { loadBotConfig } from './utils/yaml';
 import { taskCompletionTool } from './llm/tools/task';
+import { jobQueue } from './queue';
+import { getIssue } from './github/issue';
+import { envConfig } from './config/env';
+import { parseGitHubIssueUrl } from './utils/github';
 
 async function main() {
   const program = new Command();
@@ -28,22 +33,58 @@ async function main() {
         process.exit(1);
       }
 
-      try {
-        const result = await processCodeModificationRequest(
-          userInput,
-          path.resolve(process.cwd(), '..', 'cheatgpt_new'),
-          await loadBotConfig(path.resolve(process.cwd())),
-          true,
-          taskCompletionTool,
-        );
+      const result = await processCodeModificationRequest(
+        userInput,
+        path.resolve(process.cwd(), '..', 'cheatgpt_new'),
+        await loadBotConfig(path.resolve(process.cwd())),
+        true,
+        taskCompletionTool,
+      );
 
-        if (!result?.objectiveAchieved) {
-          console.warn(`\n⚠️ Agent finished, reason: ${result?.reasonOrOutput}.`);
-        }
-      } catch (error) {
-        console.error('\n❌ Error running agent:', error);
+      if (!result?.objectiveAchieved) {
+        console.warn(`\n⚠️ Agent finished, reason: ${result?.reasonOrOutput}.`);
+      }
+    });
+
+  program
+    .command('issue-to-pr')
+    .description('Process an issue to a PR')
+    .argument('[issue-url]', 'The URL of the issue to process')
+    .action(async (issueUrl: string | undefined) => {
+      if (!issueUrl) {
+        console.error('🔴 No issue URL provided. Exiting.');
         process.exit(1);
       }
+
+      if (!envConfig.BOT_USER_PAT) {
+        console.error('🔴 No BOT_USER_PAT configured. Exiting.');
+        process.exit(1);
+      }
+
+      const octokit = new Octokit({ auth: envConfig.BOT_USER_PAT });
+
+      console.log(`🔍 Fetching issue from: ${issueUrl}`);
+      const issue = await getIssue(octokit, issueUrl);
+
+      const { owner: repoOwner, repo: repoName } = parseGitHubIssueUrl(issueUrl);
+      const repoUrl = `https://github.com/${repoOwner}/${repoName}.git`;
+
+      console.log(`📝 Creating job for issue #${issue.number} in ${repoOwner}/${repoName}`);
+
+      const job = await jobQueue.addJob({
+        type: 'issue_to_pr',
+        id: `cli_issue_to_pr_${Date.now()}`,
+        issueNumber: issue.number,
+        triggeredBy: issue.user?.login || 'cli-user',
+        issue: issue,
+        repoOwner: repoOwner,
+        repoName: repoName,
+        repoUrl: repoUrl,
+        testJob: true,
+      });
+
+      console.log(`✅ Job created successfully with ID: ${job.id}`);
+      console.log(`🚀 The job will be processed automatically. Check the logs for progress.`);
     });
 
   await program.parseAsync(process.argv);

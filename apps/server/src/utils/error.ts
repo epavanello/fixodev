@@ -1,3 +1,5 @@
+import { logger } from '@/config/logger';
+
 /**
  * Base application error
  */

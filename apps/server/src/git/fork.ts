@@ -1,8 +1,8 @@
 import { Octokit } from '@octokit/rest';
-import { logger as rootLogger } from '../config/logger';
 import { JobError } from '../utils/error';
+import { defaultLogger } from '../utils/logger';
 
-const logger = rootLogger.child({ context: 'GitFork' });
+const forkLogger = defaultLogger.child({ module: 'git-fork' });
 
 export interface ForkResult {
   forkOwner: string;
@@ -30,46 +30,56 @@ export async function ensureForkExists(
   let forkRepoName = originalRepoName;
   let forkCloneUrl: string;
 
-  try {
-    logger.info(`Checking if fork ${forkOwner}/${forkRepoName} exists.`);
-    const forkCheckResponse = await octokit.repos.get({
-      owner: forkOwner,
-      repo: forkRepoName,
-    });
-    forkCloneUrl = forkCheckResponse.data.clone_url;
-    logger.info(`Fork ${forkOwner}/${forkRepoName} already exists at ${forkCloneUrl}.`);
+  const operationLogger = forkLogger.child({
+    originalRepo: `${originalRepoOwner}/${originalRepoName}`,
+    desiredForkOwner,
+  });
+
+  // First, try to check if fork already exists
+  const forkCheckResult = await operationLogger.safe(
+    () =>
+      octokit.repos.get({
+        owner: forkOwner,
+        repo: forkRepoName,
+      }),
+    'check if fork exists',
+    { forkRepo: `${forkOwner}/${forkRepoName}` },
+  );
+
+  if (forkCheckResult.ok) {
+    // Fork already exists
+    forkCloneUrl = forkCheckResult.data.data.clone_url;
     return { forkOwner, forkRepoName, forkCloneUrl };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (error instanceof Error && 'status' in error && error.status === 404) {
-      logger.info(`Fork ${forkOwner}/${forkRepoName} does not exist. Creating fork...`);
-      try {
-        const createForkResponse = await octokit.repos.createFork({
-          owner: originalRepoOwner,
-          repo: originalRepoName,
-          // organization: if bot is part of an org and needs to fork there, this might be needed
-        });
-        forkCloneUrl = createForkResponse.data.clone_url;
-        // The owner of the fork might differ from desiredForkOwner if forking to an org the user is part of
-        forkOwner = createForkResponse.data.owner.login;
-        forkRepoName = createForkResponse.data.name; // Name usually stays the same
-        logger.info(
-          `Successfully forked ${originalRepoOwner}/${originalRepoName} to ${forkOwner}/${forkRepoName} at ${forkCloneUrl}.`,
-        );
-        // GitHub might take a few moments to make the fork fully available for cloning
-        logger.info('Waiting for 5 seconds for the fork to become available...');
-        await new Promise(resolve => setTimeout(resolve, 5000)); // 5s delay
-        return { forkOwner, forkRepoName, forkCloneUrl };
-      } catch (forkError) {
-        const forkErrorMessage = forkError instanceof Error ? forkError.message : String(forkError);
-        logger.error({ error: forkError }, `Failed to create fork.`);
-        throw new JobError(
-          `Failed to create fork ${desiredForkOwner}/${originalRepoName} from ${originalRepoOwner}/${originalRepoName}: ${forkErrorMessage}`,
-        );
-      }
-    } else {
-      logger.error({ error: error }, `Failed to check for fork ${forkOwner}/${forkRepoName}.`);
-      throw new JobError(`Failed to check for fork ${forkOwner}/${forkRepoName}: ${errorMessage}`);
-    }
   }
+
+  // Check if it's a 404 (fork doesn't exist) or another error
+  const error = forkCheckResult.error;
+  if (!('status' in error) || error.status !== 404) {
+    // It's not a 404, so it's a real error
+    throw new JobError(`Failed to check for fork ${forkOwner}/${forkRepoName}: ${error.message}`);
+  }
+
+  // Fork doesn't exist, create it
+  const createForkResponse = await operationLogger.execute(
+    () =>
+      octokit.repos.createFork({
+        owner: originalRepoOwner,
+        repo: originalRepoName,
+      }),
+    'create fork',
+    { targetFork: `${forkOwner}/${forkRepoName}` },
+  );
+
+  forkCloneUrl = createForkResponse.data.clone_url;
+  forkOwner = createForkResponse.data.owner.login;
+  forkRepoName = createForkResponse.data.name;
+
+  // Wait for fork to become available
+  await operationLogger.execute(
+    () => new Promise(resolve => setTimeout(resolve, 5000)),
+    'wait for fork to become available',
+    { waitTimeMs: 5000, finalFork: `${forkOwner}/${forkRepoName}` },
+  );
+
+  return { forkOwner, forkRepoName, forkCloneUrl };
 }

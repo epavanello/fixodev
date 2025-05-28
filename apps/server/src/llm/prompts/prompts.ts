@@ -15,6 +15,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename); 
 
 // --- Argument Types ---
+export type IssueArgs = {
+  readonly assignees?: string;
+  readonly author: string;
+  readonly body?: string;
+  readonly comments?: Array<{
+    readonly body?: string;
+    readonly createdAt: string;
+    readonly updatedAt?: string;
+    readonly user: string;
+    }>;
+  readonly createdAt: string;
+  readonly issueNumber: string;
+  readonly labels?: string;
+  readonly owner: string;
+  readonly repo: string;
+  readonly state: string;
+  readonly title: string;
+  readonly updatedAt?: string;
+};
+
 export type SystemArgs = {
   readonly completionToolName?: string;
   readonly maxLines: string;
@@ -52,6 +72,20 @@ export type TestArgs = {
 
 
 // --- Prompt Generation Functions ---
+
+/**
+ * Generates the 'issue.md' prompt using Handlebars.
+ * Template sub-path relative to prompts directory: issue.md
+ */
+export async function generateIssuePrompt(
+  args: IssueArgs
+): Promise<string> {
+  const templatePath = path.resolve(process.cwd(), 'prompts', 'issue.md');
+  const templateContent = await fs.readFile(templatePath, 'utf-8');
+  const compiledTemplate = Handlebars.compile(templateContent);
+  return compiledTemplate(args);
+}
+
 
 /**
  * Generates the 'system.md' prompt using Handlebars.
