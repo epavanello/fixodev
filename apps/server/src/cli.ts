@@ -41,8 +41,8 @@ async function main() {
         taskCompletionTool,
       );
 
-      if (!result?.objectiveAchieved) {
-        console.warn(`\n⚠️ Agent finished, reason: ${result?.reasonOrOutput}.`);
+      if (!result?.output?.objectiveAchieved) {
+        console.warn(`\n⚠️ Agent finished, reason: ${result?.output?.reasonOrOutput}.`);
       }
     });
 

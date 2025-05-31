@@ -17,8 +17,8 @@ import {
   handleRateLimitExceeded,
   postInitialComment,
   cleanupInitialComment,
-  postFinalComment,
   postErrorComment,
+  generateAndPostFormattedComment,
 } from './shared';
 
 export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
@@ -149,7 +149,7 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
     const hasPendingChanges = status.files.length > 0;
 
     let prUrl: string | undefined;
-    if (hasPendingChanges && modificationResult?.objectiveAchieved) {
+    if (hasPendingChanges && modificationResult?.output?.objectiveAchieved) {
       const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber} by ${envConfig.BOT_NAME}`;
 
       await jobLogger.execute(() => commitChanges(git, commitMessage), 'commit changes', {
@@ -189,17 +189,20 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
       );
     }
 
-    // Post final comment
-    const replyMessage = prUrl
+    // Construct the introductory message for the comment
+    const introMessage = prUrl
       ? `✅ @${triggeredBy}, I've created a pull request for you: ${prUrl}`
       : `✅ @${triggeredBy}, I received your request, but no actionable changes were identified or no changes were necessary after running checks.`;
 
-    await postFinalComment(
+    // Call the shared function to generate and post the comment
+    await generateAndPostFormattedComment(
       octokit,
       originalRepoOwner,
       originalRepoName,
       eventIssueNumber,
-      replyMessage,
+      triggeredBy,
+      introMessage,
+      modificationResult,
       testJob,
       jobLogger,
       { prUrl },

@@ -1,6 +1,7 @@
 import { MemoryStore, MemoryEntry } from './memory';
 import { ToolRegistry } from '../tools/registry';
-import { CoreMessage, ToolResultUnion } from 'ai';
+import { CoreMessage, ToolResultUnion, ToolCallPart, ToolResultPart } from 'ai';
+import { formatDataForLogging } from '@/utils/json';
 
 /**
  * The context for an agent, including conversation history and memory
@@ -174,5 +175,66 @@ export class AgentContext {
       .reverse();
 
     return this.messages;
+  }
+
+  /**
+   * Generates a user-friendly detailed trace of the conversation history.
+   * Each item in the returned array is an object with a 'message' string.
+   */
+  public getFormattedHistoryTrace(): Array<{ message: string }> {
+    const detailedTrace: Array<{ message: string }> = [];
+    const messagesToProcess = this.getMessages(); // Use getMessages to ensure any transformations are applied
+
+    messagesToProcess.forEach((msg: CoreMessage) => {
+      switch (msg.role) {
+        case 'user':
+          detailedTrace.push({ message: `User: ${msg.content}` });
+          break;
+        case 'assistant': {
+          const assistantMessage = msg;
+          let assistantTextContent = '';
+
+          if (Array.isArray(assistantMessage.content)) {
+            assistantMessage.content.forEach(part => {
+              if (part.type === 'text') {
+                assistantTextContent += part.text;
+              } else if (part.type === 'tool-call') {
+                const toolCall = part as ToolCallPart;
+                detailedTrace.push({
+                  message: `Assistant: Calls tool \`${toolCall.toolName}\` with args: ${formatDataForLogging(toolCall.args)}`,
+                });
+              }
+            });
+            if (assistantTextContent) {
+              // Add accumulated text only if it's not empty
+              detailedTrace.push({ message: `Assistant: ${assistantTextContent.trim()}` });
+            }
+          } else if (
+            typeof assistantMessage.content === 'string' &&
+            assistantMessage.content.trim() !== ''
+          ) {
+            // Add string content only if it's not empty or just whitespace
+            detailedTrace.push({ message: `Assistant: ${assistantMessage.content.trim()}` });
+          }
+          // If there was only a tool_call and no text, it's handled above.
+          // If content was an empty string or array, nothing is added for the main assistant message, which is fine.
+          break;
+        }
+        case 'tool': {
+          if (Array.isArray(msg.content)) {
+            (msg.content as ToolResultPart[]).forEach(toolResult => {
+              if (toolResult.type === 'tool-result') {
+                detailedTrace.push({
+                  message: `Tool: \`${toolResult.toolName}\` returned: ${formatDataForLogging(toolResult.result)}`,
+                });
+              }
+            });
+          }
+          break;
+        }
+        // System messages are generally not part of this user-facing trace
+      }
+    });
+    return detailedTrace;
   }
 }

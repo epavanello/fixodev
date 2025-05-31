@@ -267,7 +267,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
         output,
         steps: this.steps,
         totalCostInMillionths,
-        history: this.context.getMessages(),
+        formattedHistoryTrace: this.context.getFormattedHistoryTrace(),
       };
     } catch (error) {
       logger.error({ error }, 'Agent execution error');

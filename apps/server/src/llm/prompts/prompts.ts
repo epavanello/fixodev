@@ -59,6 +59,15 @@ export type PrUpdateArgs = {
   readonly updatedAt?: string;
 };
 
+export type PrUpdateFinalCommentArgs = {
+  readonly commentIntroMessage: string;
+  readonly detailedTrace: Array<{
+    readonly message: string;
+    }>;
+  readonly estimatedCost: string;
+  readonly stepsCount: string;
+};
+
 export type SystemArgs = {
   readonly completionToolName?: string;
   readonly maxLines: string;
@@ -119,6 +128,20 @@ export async function generatePrUpdatePrompt(
   args: PrUpdateArgs
 ): Promise<string> {
   const templatePath = path.resolve(process.cwd(), 'prompts', 'pr-update.md');
+  const templateContent = await fs.readFile(templatePath, 'utf-8');
+  const compiledTemplate = Handlebars.compile(templateContent);
+  return compiledTemplate(args);
+}
+
+
+/**
+ * Generates the 'pr-update-final-comment.md' prompt using Handlebars.
+ * Template sub-path relative to prompts directory: pr-update-final-comment.md
+ */
+export async function generatePrUpdateFinalCommentPrompt(
+  args: PrUpdateFinalCommentArgs
+): Promise<string> {
+  const templatePath = path.resolve(process.cwd(), 'prompts', 'pr-update-final-comment.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
   const compiledTemplate = Handlebars.compile(templateContent);
   return compiledTemplate(args);

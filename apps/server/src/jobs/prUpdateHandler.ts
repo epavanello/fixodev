@@ -16,8 +16,8 @@ import {
   handleRateLimitExceeded,
   postInitialComment,
   cleanupInitialComment,
-  postFinalComment,
   postErrorComment,
+  generateAndPostFormattedComment,
 } from './shared';
 
 export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
@@ -161,7 +161,8 @@ export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
     const status = await jobLogger.execute(() => git.status(), 'check repository status');
     const hasPendingChanges = status.files.length > 0;
 
-    if (hasPendingChanges && modificationResult?.output?.reasonOrOutput) {
+    // Restore commit and push logic if changes were made and objective achieved
+    if (hasPendingChanges && modificationResult?.output?.objectiveAchieved) {
       const commitMessage = `fix: Update PR based on feedback from @${triggeredBy} in ${originalRepoOwner}/${originalRepoName}#${prNumber}`;
 
       await jobLogger.execute(() => commitChanges(git, commitMessage), 'commit changes', {
@@ -186,67 +187,26 @@ export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
       );
     }
 
-    // Post final comment
-    let replyMessage =
+    // Construct the introductory message for the comment
+    const introMessage =
       hasPendingChanges && modificationResult?.output?.objectiveAchieved
         ? `✅ @${triggeredBy}, I've updated the PR based on your feedback! The changes have been pushed to the \`${prHeadBranch}\` branch.`
         : `✅ @${triggeredBy}, I received your feedback, but no actionable changes were identified or no changes were necessary after running checks.`;
 
-    // Append modification details if available
-    if (modificationResult) {
-      let detailsSuffix = '\n\n**Run Details:**';
-      if (modificationResult.output && modificationResult.output.reasonOrOutput) {
-        const reason = modificationResult.output.reasonOrOutput;
-        detailsSuffix +=
-          '\n* Outcome: ' + reason.substring(0, 300) + (reason.length > 300 ? '...' : '');
-      }
-      if (
-        modificationResult.history &&
-        Array.isArray(modificationResult.history) &&
-        modificationResult.history.length > 0
-      ) {
-        detailsSuffix += '\n* History Events: ' + modificationResult.history.length;
-      }
-      if (
-        modificationResult.steps &&
-        Array.isArray(modificationResult.steps) &&
-        modificationResult.steps.length > 0
-      ) {
-        detailsSuffix += '\n* Processing Steps: ' + modificationResult.steps.length;
-      }
-      if (typeof modificationResult.totalCostInMillionths === 'number') {
-        const costInDollars = modificationResult.totalCostInMillionths / 1000000;
-        detailsSuffix += '\n* Estimated Cost: $' + costInDollars.toFixed(4);
-      }
-
-      if (detailsSuffix !== '\n\n**Run Details:**') {
-        replyMessage += detailsSuffix;
-      }
-    }
-
-    await postFinalComment(
+    // Call the shared function to generate and post the comment
+    await generateAndPostFormattedComment(
       octokit,
       originalRepoOwner,
       originalRepoName,
       prNumber,
-      replyMessage,
+      triggeredBy,
+      introMessage,
+      modificationResult, // Pass the whole modificationResult
       testJob,
       jobLogger,
-      { hasPendingChanges },
+      { hasPendingChanges }, // Pass relevant metadata
     );
   } catch (error) {
-    // Clean up initial comment on error
-    if (initialCommentId) {
-      await cleanupInitialComment(
-        octokit,
-        originalRepoOwner,
-        originalRepoName,
-        initialCommentId,
-        testJob,
-        jobLogger,
-      );
-    }
-
     // Post error comment
     await postErrorComment(
       octokit,

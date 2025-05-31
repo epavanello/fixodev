@@ -5,6 +5,10 @@ import { OperationLogger } from '@/utils/logger';
 import { envConfig } from '../config/env';
 import { ensureForkExists } from '../git/fork';
 import { RateLimitManager } from '../utils/rateLimit';
+import {
+  generatePrUpdateFinalCommentPrompt,
+  PrUpdateFinalCommentArgs,
+} from '../llm/prompts/prompts';
 
 export interface AuthenticationResult {
   octokit: Octokit;
@@ -252,4 +256,60 @@ export async function postErrorComment(
       { error: error instanceof Error ? error.message : String(error) },
     );
   }
+}
+
+// Define a structure for ModificationResult based on usage in handlers
+// This might need to be adjusted if a more specific type is available elsewhere
+interface MinimalModificationResult {
+  steps?: Array<any>; // Replace 'any' with actual AgentStep type if available
+  totalCostInMillionths?: number;
+  formattedHistoryTrace?: Array<{ message: string }>;
+  // output?: { objectiveAchieved?: boolean; reasonOrOutput?: string }; // Add if needed by intro logic
+}
+
+/**
+ * Generates a formatted comment using the pr-update-final-comment template
+ * and posts it to the issue/PR.
+ */
+export async function generateAndPostFormattedComment(
+  octokit: Octokit,
+  originalRepoOwner: string,
+  originalRepoName: string,
+  eventNumber: number, // Renamed from issueOrPrNumber for clarity
+  triggeredBy: string,
+  commentIntro: string, // The introductory sentence for the comment
+  modificationResult: MinimalModificationResult | undefined | null, // Allow undefined or null
+  testJob: boolean | undefined,
+  jobLogger: OperationLogger,
+  metadata?: Record<string, any>, // For postFinalComment
+): Promise<void> {
+  let replyMessage: string;
+
+  if (modificationResult) {
+    const { steps, totalCostInMillionths, formattedHistoryTrace } = modificationResult;
+
+    const commentArgs: PrUpdateFinalCommentArgs = {
+      commentIntroMessage: commentIntro,
+      stepsCount: (steps?.length || 0).toString(),
+      estimatedCost: totalCostInMillionths
+        ? (totalCostInMillionths / 1000000).toFixed(4)
+        : '0.0000',
+      detailedTrace: formattedHistoryTrace || [],
+    };
+    replyMessage = await generatePrUpdateFinalCommentPrompt(commentArgs);
+  } else {
+    // Fallback if no modification result (e.g., no changes made, or error before processing)
+    replyMessage = commentIntro; // Or a more specific fallback based on commentIntro
+  }
+
+  await postFinalComment(
+    octokit,
+    originalRepoOwner,
+    originalRepoName,
+    eventNumber,
+    replyMessage,
+    testJob,
+    jobLogger,
+    metadata,
+  );
 }
