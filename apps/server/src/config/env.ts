@@ -18,7 +18,7 @@ const envSchema = z.object({
     .string()
     .default('fixodev')
     .transform(val => val.replace(/[^a-zA-Z0-9_.-]/g, '-')),
-
+  APP_NAME: z.string().default('fixo-dev'),
   // OpenAI
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
 

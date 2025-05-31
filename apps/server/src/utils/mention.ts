@@ -12,6 +12,6 @@ export function isBotMentioned(body: string | null | undefined, sender: string) 
   return (
     body.toLowerCase().includes(BOT_MENTION) &&
     sender.toLowerCase() !== envConfig.BOT_NAME.toLowerCase() &&
-    sender.toLowerCase() !== `${envConfig.BOT_NAME.toLowerCase()}[bot]`
+    sender.toLowerCase() !== `${envConfig.APP_NAME.toLowerCase()}[bot]`
   );
 }
