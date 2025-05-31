@@ -1,7 +1,7 @@
-import { IssueToPrJob } from '../types/jobs';
+import { PrUpdateJob } from '../types/jobs';
 import { cloneRepository, cleanupRepository } from '../git/clone';
-import { createBranch, commitChanges, pushChanges } from '../git/operations';
-import { createPullRequest } from '../github/pr';
+import { checkoutBranch, commitChanges, pushChanges } from '../git/operations';
+import { buildPullRequestContext, getPullRequest } from '../github/pr';
 import { loadBotConfig } from '../utils/yaml';
 import { JobError } from '../utils/error';
 import { OperationLogger } from '@/utils/logger';
@@ -10,7 +10,6 @@ import { processCodeModificationRequest } from '@/llm/processor';
 import { taskCompletionTool } from '@/llm/tools/task';
 import { RateLimitManager } from '../utils/rateLimit';
 import { db } from '../db';
-import { buildIssueContext } from '../github/issue';
 import {
   handleAuthentication,
   checkRateLimits,
@@ -21,16 +20,16 @@ import {
   postErrorComment,
 } from './shared';
 
-export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
+export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
   const {
     id: jobId,
     repoOwner: originalRepoOwner,
     repoName: originalRepoName,
-    issueNumber: eventIssueNumber,
+    prNumber,
     triggeredBy,
     repoUrl,
     installationId,
-    issue,
+    instructions,
     testJob,
   } = job;
 
@@ -38,7 +37,7 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
     jobId,
     jobType: job.type,
     repo: `${originalRepoOwner}/${originalRepoName}`,
-    issue: eventIssueNumber,
+    pr: prNumber,
     triggeredBy,
   });
 
@@ -48,7 +47,7 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
   let repoPath: string | undefined;
 
   // Handle authentication
-  const { octokit, cloneToken, repositoryToCloneUrl, headBranchOwner } = await handleAuthentication(
+  const { octokit, cloneToken, repositoryToCloneUrl } = await handleAuthentication(
     installationId,
     originalRepoOwner,
     originalRepoName,
@@ -73,7 +72,7 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
       octokit,
       originalRepoOwner,
       originalRepoName,
-      eventIssueNumber,
+      prNumber,
       testJob,
       jobLogger,
     );
@@ -85,9 +84,9 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
     octokit,
     originalRepoOwner,
     originalRepoName,
-    eventIssueNumber,
+    prNumber,
     triggeredBy,
-    `👋 Hi @${triggeredBy}, I'm on it! I'll apply changes, and open a PR if needed. Stay tuned!`,
+    `👋 Hi @${triggeredBy}, I'm working on updating this PR based on your feedback! Stay tuned!`,
     testJob,
     jobLogger,
   );
@@ -122,15 +121,29 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
       { repoPath },
     );
 
-    const branchName = `${envConfig.BOT_NAME}/${eventIssueNumber}-${Date.now().toString().slice(-6)}`;
-    await jobLogger.execute(() => createBranch(git, branchName), 'create new branch', {
-      branchName,
+    // Get the latest PR data to ensure we have the most up-to-date information
+    const latestPullRequest = await jobLogger.execute(
+      () => getPullRequest(octokit, originalRepoOwner, originalRepoName, prNumber),
+      'get latest pull request data',
+    );
+
+    // Checkout the PR's head branch instead of creating a new one
+    const prHeadBranch = latestPullRequest.head.ref;
+    await jobLogger.execute(() => checkoutBranch(git, prHeadBranch), 'checkout PR head branch', {
+      branchName: prHeadBranch,
     });
 
-    // Build comprehensive context from the issue
+    // Build comprehensive context from the PR
     const comprehensiveContext = await jobLogger.execute(
-      () => buildIssueContext(octokit, originalRepoOwner, originalRepoName, issue),
-      'build comprehensive issue context',
+      () =>
+        buildPullRequestContext(
+          octokit,
+          originalRepoOwner,
+          originalRepoName,
+          latestPullRequest,
+          instructions,
+        ),
+      'build comprehensive PR context',
     );
 
     const modificationResult = await jobLogger.execute(
@@ -148,33 +161,17 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
     const status = await jobLogger.execute(() => git.status(), 'check repository status');
     const hasPendingChanges = status.files.length > 0;
 
-    let prUrl: string | undefined;
-    if (hasPendingChanges && modificationResult?.objectiveAchieved) {
-      const commitMessage = `fix: Automated changes for ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber} by ${envConfig.BOT_NAME}`;
+    if (hasPendingChanges && modificationResult?.output?.reasonOrOutput) {
+      const commitMessage = `fix: Update PR based on feedback from @${triggeredBy} in ${originalRepoOwner}/${originalRepoName}#${prNumber}`;
 
       await jobLogger.execute(() => commitChanges(git, commitMessage), 'commit changes', {
         commitMessage,
         changedFiles: status.files.length,
       });
 
-      await jobLogger.execute(() => pushChanges(git, branchName), 'push changes', { branchName });
-
-      if (!testJob) {
-        prUrl = await jobLogger.execute(
-          () =>
-            createPullRequest(octokit, {
-              owner: originalRepoOwner,
-              repo: originalRepoName,
-              title: `🤖 Fix for "${issue.title.slice(0, 40)}${issue.title.length > 40 ? '...' : ''}" by ${envConfig.BOT_NAME}`,
-              head: `${headBranchOwner}:${branchName}`,
-              base: botConfig.branches.target || 'main',
-              body: `This PR addresses the mention of @${envConfig.BOT_NAME} in ${originalRepoOwner}/${originalRepoName}#${eventIssueNumber}.\n\nTriggered by: @${triggeredBy}`,
-              labels: ['bot', envConfig.BOT_NAME.toLowerCase()],
-            }),
-          'create pull request',
-          { branchName, headBranchOwner },
-        );
-      }
+      await jobLogger.execute(() => pushChanges(git, prHeadBranch), 'push changes', {
+        branchName: prHeadBranch,
+      });
     }
 
     // Clean up initial comment
@@ -190,19 +187,52 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
     }
 
     // Post final comment
-    const replyMessage = prUrl
-      ? `✅ @${triggeredBy}, I've created a pull request for you: ${prUrl}`
-      : `✅ @${triggeredBy}, I received your request, but no actionable changes were identified or no changes were necessary after running checks.`;
+    let replyMessage =
+      hasPendingChanges && modificationResult?.output?.objectiveAchieved
+        ? `✅ @${triggeredBy}, I've updated the PR based on your feedback! The changes have been pushed to the \`${prHeadBranch}\` branch.`
+        : `✅ @${triggeredBy}, I received your feedback, but no actionable changes were identified or no changes were necessary after running checks.`;
+
+    // Append modification details if available
+    if (modificationResult) {
+      let detailsSuffix = '\n\n**Run Details:**';
+      if (modificationResult.output && modificationResult.output.reasonOrOutput) {
+        const reason = modificationResult.output.reasonOrOutput;
+        detailsSuffix +=
+          '\n* Outcome: ' + reason.substring(0, 300) + (reason.length > 300 ? '...' : '');
+      }
+      if (
+        modificationResult.history &&
+        Array.isArray(modificationResult.history) &&
+        modificationResult.history.length > 0
+      ) {
+        detailsSuffix += '\n* History Events: ' + modificationResult.history.length;
+      }
+      if (
+        modificationResult.steps &&
+        Array.isArray(modificationResult.steps) &&
+        modificationResult.steps.length > 0
+      ) {
+        detailsSuffix += '\n* Processing Steps: ' + modificationResult.steps.length;
+      }
+      if (typeof modificationResult.totalCostInMillionths === 'number') {
+        const costInDollars = modificationResult.totalCostInMillionths / 1000000;
+        detailsSuffix += '\n* Estimated Cost: $' + costInDollars.toFixed(4);
+      }
+
+      if (detailsSuffix !== '\n\n**Run Details:**') {
+        replyMessage += detailsSuffix;
+      }
+    }
 
     await postFinalComment(
       octokit,
       originalRepoOwner,
       originalRepoName,
-      eventIssueNumber,
+      prNumber,
       replyMessage,
       testJob,
       jobLogger,
-      { prUrl },
+      { hasPendingChanges },
     );
   } catch (error) {
     // Clean up initial comment on error
@@ -222,7 +252,7 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
       octokit,
       originalRepoOwner,
       originalRepoName,
-      eventIssueNumber,
+      prNumber,
       triggeredBy,
       error,
       testJob,
@@ -233,7 +263,7 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
       throw error;
     }
     throw new JobError(
-      `Failed to handle IssueToPrJob ${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to handle PrUpdateJob ${jobId}: ${error instanceof Error ? error.message : String(error)}`,
     );
   } finally {
     if (repoPath && envConfig.CLEANUP_REPOSITORIES) {

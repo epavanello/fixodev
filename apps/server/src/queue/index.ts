@@ -1,4 +1,4 @@
-import { IssueToPrJob, QueuedJob, WorkerJob, JobStatus } from '../types/jobs';
+import { IssueToPrJob, PrUpdateJob, QueuedJob, WorkerJob, JobStatus } from '../types/jobs';
 import { processJob } from './worker';
 import { db } from '../db';
 import { jobsTable, JobInsert, JobSelect } from '../db/schema';
@@ -144,6 +144,12 @@ class JobQueue {
         id: jobFromDb.id,
         type: 'issue_to_pr',
       } as IssueToPrJob;
+    } else if (jobFromDb.type === 'pr_update') {
+      specificQueuedJobPart = {
+        ...(jobFromDb.payload as Omit<PrUpdateJob, 'id' | 'type'>),
+        id: jobFromDb.id,
+        type: 'pr_update',
+      } as PrUpdateJob;
     } else {
       this.isProcessing = false;
       await jobLogger.safe(

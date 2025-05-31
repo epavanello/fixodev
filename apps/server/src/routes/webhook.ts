@@ -3,10 +3,12 @@ import { logger } from '../config/logger';
 import { jobQueue } from '../queue';
 import { Webhooks } from '@octokit/webhooks';
 import { envConfig } from '../config/env';
-import { IssueToPrJob } from '../types/jobs';
+import { IssueToPrJob, PrUpdateJob } from '../types/jobs';
 import { WebhookEventName, WebhookEvent as OctokitWebhookEvent } from '@octokit/webhooks-types';
-import { isIssueCommentEvent, isIssueEvent } from '@/types/guards';
+import { isIssueCommentEvent, isIssueEvent, isPullRequestComment } from '@/types/guards';
 import { isBotMentioned } from '@/utils/mention';
+import { getPullRequest } from '@/github/pr';
+import { GitHubApp } from '@/github/app';
 
 // Initialize webhooks instance
 const webhooks = new Webhooks({
@@ -37,54 +39,90 @@ router.post('/github', async c => {
 
     const payload = JSON.parse(rawBody) as OctokitWebhookEvent;
 
+    const gitHubApp = new GitHubApp();
+
     let eventAction: string | undefined;
     if ('action' in payload && payload.action) {
       eventAction = payload.action;
     }
 
     if (
-      (eventName === 'issues' && isIssueEvent(payload) && payload.action === 'opened') ||
-      (eventName === 'issue_comment' &&
-        isIssueCommentEvent(payload) &&
-        payload.action === 'created')
+      ((eventName === 'issues' && isIssueEvent(payload) && payload.action === 'opened') ||
+        (eventName === 'issue_comment' &&
+          isIssueCommentEvent(payload) &&
+          payload.action === 'created')) &&
+      payload.installation?.id
     ) {
-      const issuePayload = payload;
-      const shouldProcess = isBotMentioned(
-        isIssueCommentEvent(payload) ? payload.comment.body : payload.issue.body,
-        issuePayload.sender.login,
-      );
+      const octokit = await gitHubApp.getAuthenticatedClient(payload.installation.id);
+
+      const instructions = isIssueCommentEvent(payload) ? payload.comment.body : payload.issue.body;
+
+      const shouldProcess = isBotMentioned(instructions, payload.sender.login);
 
       if (shouldProcess) {
-        const jobToQueue: IssueToPrJob = {
-          type: 'issue_to_pr',
-          id: deliveryId || `app_mention_${Date.now()}`,
-          issue: payload.issue,
-          repoOwner: payload.repository.owner.login,
-          repoName: payload.repository.name,
-          issueNumber: payload.issue.number,
-          triggeredBy: payload.sender.login,
-          installationId: payload.installation?.id,
-          repoUrl: payload.repository.clone_url,
-        };
+        // Check if this is a comment on a PR (GitHub treats PR comments as issue comments)
+        if (isIssueCommentEvent(payload) && isPullRequestComment(payload)) {
+          const pr = await getPullRequest(
+            octokit,
+            payload.repository.owner.login,
+            payload.repository.name,
+            payload.issue.number,
+          );
 
-        const queuedJobEntry = await jobQueue.addJob(jobToQueue);
+          // This is a comment on a PR - create PrUpdateJob
+          const prUpdateJob: PrUpdateJob = {
+            type: 'pr_update',
+            id: deliveryId || `pr_update_${Date.now()}`,
+            pullRequest: pr,
+            repoOwner: payload.repository.owner.login,
+            repoName: payload.repository.name,
+            prNumber: payload.issue.number,
+            triggeredBy: payload.sender.login,
+            installationId: payload.installation?.id,
+            repoUrl: payload.repository.clone_url,
+            instructions: instructions || undefined,
+          };
 
-        logger.info(
-          { jobId: queuedJobEntry.id, eventName, action: eventAction },
-          'AppMentionJob event queued',
-        );
-        return c.json({ success: true, jobId: queuedJobEntry.id });
+          const queuedJobEntry = await jobQueue.addJob(prUpdateJob);
+
+          logger.info(
+            { jobId: queuedJobEntry.id, eventName, action: eventAction },
+            'PrUpdateJob event queued',
+          );
+          return c.json({ success: true, jobId: queuedJobEntry.id });
+        } else {
+          // This is a regular issue - create IssueToPrJob
+          const jobToQueue: IssueToPrJob = {
+            type: 'issue_to_pr',
+            id: deliveryId || `app_mention_${Date.now()}`,
+            issue: payload.issue,
+            repoOwner: payload.repository.owner.login,
+            repoName: payload.repository.name,
+            issueNumber: payload.issue.number,
+            triggeredBy: payload.sender.login,
+            installationId: payload.installation?.id,
+            repoUrl: payload.repository.clone_url,
+          };
+
+          const queuedJobEntry = await jobQueue.addJob(jobToQueue);
+
+          logger.info(
+            { jobId: queuedJobEntry.id, eventName, action: eventAction },
+            'IssueToPrJob event queued',
+          );
+          return c.json({ success: true, jobId: queuedJobEntry.id });
+        }
       }
     }
 
     logger.info(
       { deliveryId, eventName, action: eventAction },
-      'Webhook event not suitable for AppMentionJob queueing (no mention, unsupported action, or missing data).',
+      'Webhook event not suitable for queueing (no mention, unsupported action, or missing data).',
     );
     return c.json({
       success: true,
       processed: false,
-      message: 'Event not queued for AppMentionJob processing.',
+      message: 'Event not queued for processing.',
     });
   } catch (error) {
     logger.error({ error: error }, 'Error processing webhook');

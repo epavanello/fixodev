@@ -1,4 +1,4 @@
-import { Issue } from '@octokit/webhooks-types';
+import { Issue, PullRequest } from '@octokit/webhooks-types';
 
 interface BaseJob {
   id: string;
@@ -20,13 +20,29 @@ export interface IssueToPrJob extends BaseJob {
 }
 
 /**
+ * Job triggered on a PR comment to update existing PR
+ */
+export interface PrUpdateJob extends BaseJob {
+  prNumber: number;
+  triggeredBy: string;
+  type: 'pr_update';
+  pullRequest: PullRequest;
+  instructions?: string;
+  installationId?: number;
+}
+
+/**
  * Union type for all possible jobs in the queue.
  */
-export type QueuedJob = IssueToPrJob;
+export type QueuedJob = IssueToPrJob | PrUpdateJob;
 
 // Type Guards
 export function isIssueToPrJob(job: QueuedJob): job is IssueToPrJob {
   return job.type === 'issue_to_pr';
+}
+
+export function isPrUpdateJob(job: QueuedJob): job is PrUpdateJob {
+  return job.type === 'pr_update';
 }
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';

@@ -79,3 +79,32 @@ export const pushChanges = async (git: SimpleGit, branchName: string): Promise<v
     remote: 'origin',
   });
 };
+
+/**
+ * Checkout an existing branch
+ */
+export const checkoutBranch = async (git: SimpleGit, branchName: string): Promise<void> => {
+  const operationLogger = gitLogger.child({ operation: 'checkout-branch', branchName });
+
+  // Fetch latest changes from remote
+  await operationLogger.execute(() => git.fetch(), 'fetch latest changes');
+
+  // Check if branch exists locally
+  const branches = await operationLogger.execute(() => git.branch(), 'get branch list');
+
+  if (branches.all.includes(branchName)) {
+    // Branch exists locally, just checkout
+    await operationLogger.execute(() => git.checkout(branchName), 'checkout existing local branch');
+  } else if (branches.all.includes(`remotes/origin/${branchName}`)) {
+    // Branch exists on remote, create local tracking branch
+    await operationLogger.execute(
+      () => git.checkoutBranch(branchName, `origin/${branchName}`),
+      'checkout remote branch and create local tracking branch',
+    );
+  } else {
+    throw new GitHubError(`Branch ${branchName} not found locally or on remote`);
+  }
+
+  // Pull latest changes
+  await operationLogger.execute(() => git.pull(), 'pull latest changes');
+};

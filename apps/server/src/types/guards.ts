@@ -36,3 +36,11 @@ export const isPullRequestReviewCommentEvent = (
   // The check for 'review' might need refinement based on specific needs, here we assume its presence signifies this event type.
   return 'pull_request' in event && 'comment' in event && 'action' in event;
 };
+
+/**
+ * Check if an issue comment event is actually a comment on a PR
+ * (GitHub treats PR comments as issue comments in the API)
+ */
+export const isPullRequestComment = (event: IssueCommentEvent): boolean => {
+  return event.issue.pull_request !== undefined;
+};

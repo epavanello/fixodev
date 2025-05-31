@@ -124,10 +124,7 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
   /**
    * Run the agent with a given input, iterating until task completion or max iterations
    */
-  async run(
-    input: string,
-    { toolChoice = 'auto' }: { toolChoice?: 'auto' | 'none' | 'required' },
-  ): Promise<OUTPUT | undefined> {
+  async run(input: string, { toolChoice = 'auto' }: { toolChoice?: 'auto' | 'none' | 'required' }) {
     try {
       this.context.addUserMessage(input);
 
@@ -266,7 +263,12 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
         );
       }
 
-      return output;
+      return {
+        output,
+        steps: this.steps,
+        totalCostInMillionths,
+        history: this.context.getMessages(),
+      };
     } catch (error) {
       logger.error({ error }, 'Agent execution error');
       throw error;

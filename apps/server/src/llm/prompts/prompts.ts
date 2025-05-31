@@ -35,6 +35,30 @@ export type IssueArgs = {
   readonly updatedAt?: string;
 };
 
+export type PrUpdateArgs = {
+  readonly author: string;
+  readonly baseBranch: string;
+  readonly body?: string;
+  readonly comments?: Array<{
+    readonly body?: string;
+    readonly createdAt: string;
+    readonly updatedAt?: string;
+    readonly user: string;
+    }>;
+  readonly createdAt: string;
+  readonly diff: string;
+  readonly headBranch: string;
+  readonly instructions?: string;
+  readonly labels?: string;
+  readonly linkedIssueContext?: string;
+  readonly owner: string;
+  readonly prNumber: string;
+  readonly repo: string;
+  readonly state: string;
+  readonly title: string;
+  readonly updatedAt?: string;
+};
+
 export type SystemArgs = {
   readonly completionToolName?: string;
   readonly maxLines: string;
@@ -81,6 +105,20 @@ export async function generateIssuePrompt(
   args: IssueArgs
 ): Promise<string> {
   const templatePath = path.resolve(process.cwd(), 'prompts', 'issue.md');
+  const templateContent = await fs.readFile(templatePath, 'utf-8');
+  const compiledTemplate = Handlebars.compile(templateContent);
+  return compiledTemplate(args);
+}
+
+
+/**
+ * Generates the 'pr-update.md' prompt using Handlebars.
+ * Template sub-path relative to prompts directory: pr-update.md
+ */
+export async function generatePrUpdatePrompt(
+  args: PrUpdateArgs
+): Promise<string> {
+  const templatePath = path.resolve(process.cwd(), 'prompts', 'pr-update.md');
   const templateContent = await fs.readFile(templatePath, 'utf-8');
   const compiledTemplate = Handlebars.compile(templateContent);
   return compiledTemplate(args);

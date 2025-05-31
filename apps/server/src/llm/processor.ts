@@ -92,7 +92,7 @@ export const processCodeModificationRequest = async <PARAMS extends ToolParamete
   conversationalLogging: boolean = false,
   outputTool?: WrappedTool<PARAMS, OUTPUT> | undefined,
   agentOptionOverrides?: Partial<AgentOptions>,
-): Promise<OUTPUT | undefined> => {
+) => {
   try {
     const context: CodeContext = {
       command: modificationRequest,

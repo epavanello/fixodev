@@ -70,7 +70,7 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           continue;
         }
 
-        const userMentionJob: IssueToPrJob = {
+        const issueToPrJob: IssueToPrJob = {
           type: 'issue_to_pr',
           id: `user_mention_${notification.id}_${Date.now()}`,
           repoOwner: notification.repository.owner.login,
@@ -81,14 +81,14 @@ async function fetchAndProcessNotifications(octokit: Octokit) {
           repoUrl: notification.repository.html_url,
         };
 
-        await jobQueue.addJob(userMentionJob);
+        await jobQueue.addJob(issueToPrJob);
         logger.info(
           {
-            jobId: userMentionJob.id,
+            jobId: issueToPrJob.id,
             repo: notification.repository.full_name,
             issue: issue.number,
           },
-          'UserMentionJob queued.',
+          'IssueToPrJob queued.',
         );
 
         await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
