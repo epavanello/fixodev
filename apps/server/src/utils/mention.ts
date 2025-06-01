@@ -1,4 +1,5 @@
 import { envConfig } from '@/config/env';
+import { logger } from '@/config/logger';
 
 const BOT_MENTION = `@${envConfig.BOT_NAME}`.toLowerCase();
 
@@ -9,9 +10,13 @@ export function isBotMentioned(body: string | null | undefined, sender: string) 
   if (!body) {
     return false;
   }
-  return (
+  const result =
     body.toLowerCase().includes(BOT_MENTION) &&
     sender.toLowerCase() !== envConfig.BOT_NAME.toLowerCase() &&
-    sender.toLowerCase() !== `${envConfig.APP_NAME.toLowerCase()}[bot]`
-  );
+    sender.toLowerCase() !== `${envConfig.APP_NAME.toLowerCase()}[bot]`;
+
+  if (result) {
+    logger.info({ sender }, 'Bot mentioned');
+  }
+  return result;
 }

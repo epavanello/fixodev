@@ -46,7 +46,7 @@ router.post('/github', async c => {
       eventAction = payload.action;
     }
 
-    logger.info({ eventName, eventAction }, 'Webhook event');
+    logger.info({ eventName, eventAction, deliveryId }, 'Webhook event');
 
     if (
       ((eventName === 'issues' && isIssueEvent(payload) && payload.action === 'opened') ||
