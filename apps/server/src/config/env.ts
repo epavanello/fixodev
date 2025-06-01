@@ -51,6 +51,9 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform(val => (val ? parseInt(val) : undefined)),
+
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  DATABASE_AUTH_TOKEN: z.string().min(1, 'DATABASE_AUTH_TOKEN is required'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
