@@ -31,9 +31,7 @@
       "cwd": "${workspaceFolder}/apps/server",
       "args": [
         "issue-to-pr",
-        "https://github.com/epavanello/cheatgpt.app/issues/18",
-        "--installation-id",
-        ""
+        "https://github.com/epavanello/cheatgpt.app/issues/18"
       ],
       "stopOnEntry": false,
       "watchMode": false,
@@ -46,6 +44,42 @@
       "request": "attach",
       "name": "Attach to Bun",
       "url": "ws://localhost:6499/"
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug CLI: Webhook Event",
+      "program": "${workspaceFolder}/apps/server/src/cli.ts",
+      "cwd": "${workspaceFolder}/apps/server",
+      "args": [
+        "debug-webhook",
+        "issues",
+        "./debug-payloads/webhook-payload.json",
+        "--test"
+      ],
+      "stopOnEntry": false,
+      "watchMode": false,
+      "env": {
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug CLI: Notification Event(s)",
+      "program": "${workspaceFolder}/apps/server/src/cli.ts",
+      "cwd": "${workspaceFolder}/apps/server",
+      "args": [
+        "debug-notification",
+        "./debug-payloads/notification-payload.json",
+        "--test"
+      ],
+      "stopOnEntry": false,
+      "watchMode": false,
+      "env": {
+        "NODE_ENV": "development",
+        "BOT_USER_PAT": "your_github_pat_here"
+      }
     }
   ]
 }

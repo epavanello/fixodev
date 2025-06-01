@@ -34,3 +34,4 @@ repos/
 data/
 
 *.local.*
+apps/server/debug-payloads/

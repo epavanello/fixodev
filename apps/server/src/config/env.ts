@@ -47,6 +47,10 @@ const envSchema = z.object({
   // Docker
   DOCKER_RUNTIME_PREFIX: z.string().optional(),
   BOT_USER_PAT: z.string().optional(),
+  DEBUG_INSTALLATION_ID: z
+    .string()
+    .optional()
+    .transform(val => (val ? parseInt(val) : undefined)),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
