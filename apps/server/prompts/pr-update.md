@@ -1,15 +1,21 @@
 # Pull Request Context for {{owner}}/{{repo}}#{{prNumber}}
 
 **PR Title:** {{title}}
+
 **PR Number:** #{{prNumber}}
+
 **Author:** @{{author}}
+
 **State:** {{state}}
+
 **Created:** {{createdAt}}
+
 {{#if updatedAt}}**Updated:** {{updatedAt}}{{/if}}
 
 {{#if labels}}**Labels:** {{labels}}{{/if}}
 
 **Head Branch:** {{headBranch}}
+
 **Base Branch:** {{baseBranch}}
 
 ## PR Description
@@ -21,6 +27,7 @@ _No description provided_
 {{/if}}
 
 {{#if instructions}}
+
 ## Current Instruction
 
 {{instructions}}
@@ -34,6 +41,7 @@ _No description provided_
 ### Comment {{@index}} by @{{user}}
 
 **Posted:** {{createdAt}}
+
 {{#if updatedAt}}**Updated:** {{updatedAt}}{{/if}}
 
 {{#if body}}

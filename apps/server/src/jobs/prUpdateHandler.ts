@@ -107,8 +107,17 @@ export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
       );
     }
 
+    // Get the latest PR data to ensure we have the most up-to-date information
+    const latestPullRequest = await jobLogger.execute(
+      () => getPullRequest(octokit, originalRepoOwner, originalRepoName, prNumber),
+      'get latest pull request data',
+    );
+
+    // Checkout the PR's head branch instead of creating a new one
+    const prHeadBranch = latestPullRequest.head.ref;
+
     const cloneResult = await jobLogger.execute(
-      () => cloneRepository(repositoryToCloneUrl, undefined, cloneToken),
+      () => cloneRepository(repositoryToCloneUrl, prHeadBranch, cloneToken),
       'clone repository',
       { repositoryToCloneUrl },
     );
@@ -120,18 +129,6 @@ export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
       'load bot configuration',
       { repoPath },
     );
-
-    // Get the latest PR data to ensure we have the most up-to-date information
-    const latestPullRequest = await jobLogger.execute(
-      () => getPullRequest(octokit, originalRepoOwner, originalRepoName, prNumber),
-      'get latest pull request data',
-    );
-
-    // Checkout the PR's head branch instead of creating a new one
-    const prHeadBranch = latestPullRequest.head.ref;
-    await jobLogger.execute(() => checkoutBranch(git, prHeadBranch), 'checkout PR head branch', {
-      branchName: prHeadBranch,
-    });
 
     // Build comprehensive context from the PR
     const comprehensiveContext = await jobLogger.execute(
