@@ -200,7 +200,6 @@ export async function handleIssueToPrJob(job: IssueToPrJob): Promise<void> {
       originalRepoOwner,
       originalRepoName,
       eventIssueNumber,
-      triggeredBy,
       introMessage,
       modificationResult,
       testJob,

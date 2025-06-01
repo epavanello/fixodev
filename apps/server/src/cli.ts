@@ -9,6 +9,7 @@ import { jobQueue } from './queue';
 import { getIssue } from './github/issue';
 import { envConfig } from './config/env';
 import { parseGitHubIssueUrl } from './utils/github';
+import { GitHubApp } from './github/app';
 
 async function main() {
   const program = new Command();
@@ -50,42 +51,55 @@ async function main() {
     .command('issue-to-pr')
     .description('Process an issue to a PR')
     .argument('[issue-url]', 'The URL of the issue to process')
-    .action(async (issueUrl: string | undefined) => {
-      if (!issueUrl) {
-        console.error('🔴 No issue URL provided. Exiting.');
-        process.exit(1);
-      }
+    .option('-i, --installation-id <id>', 'The installation ID of the GitHub App', (id: string) =>
+      isNaN(parseInt(id)) ? undefined : parseInt(id),
+    )
+    .action(
+      async (issueUrl: string | undefined, options: { installationId: number | undefined }) => {
+        if (!issueUrl) {
+          console.error('🔴 No issue URL provided. Exiting.');
+          process.exit(1);
+        }
 
-      if (!envConfig.BOT_USER_PAT) {
-        console.error('🔴 No BOT_USER_PAT configured. Exiting.');
-        process.exit(1);
-      }
+        if (!envConfig.BOT_USER_PAT) {
+          console.error('🔴 No BOT_USER_PAT configured. Exiting.');
+          process.exit(1);
+        }
 
-      const octokit = new Octokit({ auth: envConfig.BOT_USER_PAT });
+        let octokit: Octokit;
 
-      console.log(`🔍 Fetching issue from: ${issueUrl}`);
-      const issue = await getIssue(octokit, issueUrl);
+        if (options.installationId) {
+          const app = new GitHubApp();
+          octokit = await app.getAuthenticatedClient(options.installationId);
+        } else {
+          octokit = new Octokit({ auth: envConfig.BOT_USER_PAT });
+        }
 
-      const { owner: repoOwner, repo: repoName } = parseGitHubIssueUrl(issueUrl);
-      const repoUrl = `https://github.com/${repoOwner}/${repoName}.git`;
+        console.log(`🔍 Fetching issue from: ${issueUrl}`);
+        const issue = await getIssue(octokit, issueUrl);
 
-      console.log(`📝 Creating job for issue #${issue.number} in ${repoOwner}/${repoName}`);
+        const { owner: repoOwner, repo: repoName } = parseGitHubIssueUrl(issueUrl);
+        const repoUrl = `https://github.com/${repoOwner}/${repoName}.git`;
 
-      const job = await jobQueue.addJob({
-        type: 'issue_to_pr',
-        id: `cli_issue_to_pr_${Date.now()}`,
-        issueNumber: issue.number,
-        triggeredBy: issue.user?.login || 'cli-user',
-        issue: issue,
-        repoOwner: repoOwner,
-        repoName: repoName,
-        repoUrl: repoUrl,
-        testJob: true,
-      });
+        console.log(`📝 Creating job for issue #${issue.number} in ${repoOwner}/${repoName}`);
 
-      console.log(`✅ Job created successfully with ID: ${job.id}`);
-      console.log(`🚀 The job will be processed automatically. Check the logs for progress.`);
-    });
+        const job = await jobQueue.addJob({
+          type: 'issue_to_pr',
+          id: `cli_issue_to_pr_${Date.now()}`,
+          issueNumber: issue.number,
+          triggeredBy: issue.user?.login || 'cli-user',
+          issue: issue,
+          repoOwner: repoOwner,
+          repoName: repoName,
+          repoUrl: repoUrl,
+          testJob: true,
+          installationId: options.installationId,
+        });
+
+        console.log(`✅ Job created successfully with ID: ${job.id}`);
+        console.log(`🚀 The job will be processed automatically. Check the logs for progress.`);
+      },
+    );
 
   await program.parseAsync(process.argv);
 }

@@ -61,11 +61,8 @@ export type PrUpdateArgs = {
 
 export type PrUpdateFinalCommentArgs = {
   readonly commentIntroMessage: string;
-  readonly detailedTrace: Array<{
-    readonly message: string;
-    }>;
   readonly estimatedCost: string;
-  readonly stepsCount: string;
+  readonly readableOutput: string;
 };
 
 export type SystemArgs = {

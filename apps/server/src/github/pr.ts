@@ -3,6 +3,7 @@ import { logger } from '../config/logger';
 import { GitHubError } from '../utils/error';
 import { defaultLogger } from '@/utils/logger';
 import { PullRequest } from '@octokit/webhooks-types';
+import { buildIssueContext, getIssue } from './issue';
 
 interface CreatePRParams {
   owner: string;
@@ -221,10 +222,6 @@ export const buildPullRequestContext = async (
 
   if (linkedIssueNumber) {
     try {
-      // Import here to avoid circular dependency
-      const { buildIssueContext } = await import('./issue');
-      const { getIssue } = await import('./issue');
-
       const linkedIssue = await getIssue(
         octokit,
         `https://github.com/${owner}/${repo}/issues/${linkedIssueNumber}`,

@@ -199,9 +199,8 @@ export async function handlePrUpdateJob(job: PrUpdateJob): Promise<void> {
       originalRepoOwner,
       originalRepoName,
       prNumber,
-      triggeredBy,
       introMessage,
-      modificationResult, // Pass the whole modificationResult
+      modificationResult,
       testJob,
       jobLogger,
       { hasPendingChanges }, // Pass relevant metadata

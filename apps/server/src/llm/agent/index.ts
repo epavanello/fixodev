@@ -61,28 +61,12 @@ export interface AgentOptions {
 }
 
 /**
- * A step in the agent execution
- */
-export interface AgentStep {
-  /**
-   * The input to the step
-   */
-  input: string;
-
-  /**
-   * The output from the step
-   */
-  output: string;
-}
-
-/**
  * LLM Agent for interacting with code
  */
 export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
   private context: AgentContext;
   private modelConfig: ModelConfig;
   private basePath: string;
-  private steps: AgentStep[] = [];
   private maxIterations: number;
   private conversationalLogging: boolean;
   private outputTool?: WrappedTool<PARAMS, OUTPUT>;
@@ -126,11 +110,12 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
    */
   async run(input: string, { toolChoice = 'auto' }: { toolChoice?: 'auto' | 'none' | 'required' }) {
     try {
-      this.context.addUserMessage(input);
+      this.context.addSystemMessage(input);
 
       let currentIteration = 0;
       let needMoreProcessing = true;
       let output: OUTPUT | undefined;
+      let readableOutput: string = '';
 
       const registryTools = this.context.getToolRegistry();
 
@@ -192,14 +177,14 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
               continue;
             }
 
-            logger.info(
-              `${tool.name}(${
-                tool.getReadableParams?.(toolResult.args) || formatDataForLogging(toolResult.args)
-              }) => ${
-                tool.getReadableResult?.(toolResult.result) ||
-                formatDataForLogging(toolResult.result)
-              }`,
-            );
+            const partialOutput = `🔧 ${tool.name}(${
+              tool.getReadableParams?.(toolResult.args) || formatDataForLogging(toolResult.args)
+            }) => ${
+              tool.getReadableResult?.(toolResult.result) || formatDataForLogging(toolResult.result)
+            }`;
+
+            logger.info(partialOutput);
+            readableOutput += `${partialOutput}\n`;
           }
         };
 
@@ -209,10 +194,6 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
           messages,
           tools,
           toolChoice: toolChoice,
-          // maxSteps: 5,
-          // onStepFinish: step => {
-          //   processToolResults(step.toolResults);
-          // },
         });
 
         totalCostInMillionths += calculateCostInMillionths(
@@ -240,34 +221,28 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
 
         processToolResults(response.toolResults);
 
-        // Set default for this iteration's outcome
-        let iterationOutput = responseMessage || '';
-
-        // No tool calls, just add content as a message and continue or finish
-        iterationOutput = responseMessage || '';
-        if (this.conversationalLogging && iterationOutput) {
-          console.log(`🤖 Assistant:\n${iterationOutput}`);
-        }
-
         if (responseMessage) {
-          // Add assistant message to context
+          const output = `🤖 Assistant:\n${responseMessage}`;
+          if (this.conversationalLogging) {
+            console.log(output);
+          }
+          readableOutput += `${output}\n`;
           this.context.addAssistantMessage(responseMessage);
         }
       }
 
       if (needMoreProcessing) {
+        const partialOutput = `🤖 Assistant:\nReached maximum iterations`;
+        readableOutput += `${partialOutput}\n`;
         // If we're here, we've hit the max iterations without a completion signal
-        logger.warn(
-          { maxIterations: this.maxIterations },
-          'Reached maximum iterations without explicit task completion',
-        );
+        logger.warn({ maxIterations: this.maxIterations }, 'Reached maximum iterations');
       }
 
       return {
         output,
-        steps: this.steps,
         totalCostInMillionths,
-        formattedHistoryTrace: this.context.getFormattedHistoryTrace(),
+        readableOutput,
+        steps: currentIteration,
       };
     } catch (error) {
       logger.error({ error }, 'Agent execution error');
@@ -287,12 +262,5 @@ export class RepoAgent<PARAMS extends ToolParameters, OUTPUT> {
    */
   getContext(): AgentContext {
     return this.context;
-  }
-
-  /**
-   * Get all steps in the agent execution
-   */
-  getSteps(): AgentStep[] {
-    return [...this.steps];
   }
 }

@@ -1,16 +1,11 @@
 {{{commentIntroMessage}}}
 
-**Run Summary:**
-
-- **Processing Steps:** {{stepsCount}}
-- **Estimated Cost:** ${{estimatedCost}}
-
-<details><summary><strong>Developer Trace</strong></summary>
+<details><summary><strong>Debug Trace</strong></summary>
 <p>
 
-{{#each detailedTrace}}
-{{this.message}}
-{{/each}}
+**Estimated Cost:** ${{estimatedCost}}
+
+{{readableOutput}}
 
 </p>
 </details>
