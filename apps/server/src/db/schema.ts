@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const jobsTable = sqliteTable('jobs', {
@@ -26,23 +26,15 @@ export const userPlansTable = sqliteTable('user_plans', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
-export const jobExecutionsTable = sqliteTable(
-  'job_executions',
-  {
-    id: text('id').primaryKey(),
-    jobId: text('job_id').notNull(),
-    triggeredBy: text('triggered_by').notNull(),
-    repoOwner: text('repo_owner').notNull(),
-    repoName: text('repo_name').notNull(),
-    jobType: text('job_type').notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  },
-  table => [
-    uniqueIndex('triggered_by_idx').on(table.triggeredBy),
-    uniqueIndex('repo_owner_idx').on(table.repoOwner),
-    uniqueIndex('created_at_idx').on(table.createdAt),
-  ],
-);
+export const jobExecutionsTable = sqliteTable('job_executions', {
+  id: text('id').primaryKey(),
+  jobId: text('job_id').notNull(),
+  triggeredBy: text('triggered_by').notNull(),
+  repoOwner: text('repo_owner').notNull(),
+  repoName: text('repo_name').notNull(),
+  jobType: text('job_type').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
 
 export type JobInsert = typeof jobsTable.$inferInsert;
 export type JobSelect = typeof jobsTable.$inferSelect;

@@ -30,8 +30,10 @@
       "program": "${workspaceFolder}/apps/server/src/cli.ts",
       "cwd": "${workspaceFolder}/apps/server",
       "args": [
-        "issue-to-pr"
-        //url
+        "issue-to-pr",
+        "https://github.com/epavanello/cheatgpt.app/issues/18",
+        "--installation-id",
+        ""
       ],
       "stopOnEntry": false,
       "watchMode": false,
