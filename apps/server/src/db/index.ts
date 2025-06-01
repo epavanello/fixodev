@@ -1,14 +1,11 @@
 import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
-import { join } from 'path';
+import { envConfig } from '../config/env';
 import * as schema from './schema';
 
-const DB_FILE_PATH = join(process.cwd(), 'data', 'sqlite.db');
-
-const client = createClient({
-  url: `file:${DB_FILE_PATH}`,
+export const db = drizzle({
+  schema,
+  connection: {
+    url: envConfig.DATABASE_URL,
+    authToken: envConfig.DATABASE_AUTH_TOKEN,
+  },
 });
-
-export const db = drizzle(client, { schema });
-
-export type DB = typeof db;

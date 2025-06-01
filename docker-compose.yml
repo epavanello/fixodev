@@ -15,7 +15,6 @@ services:
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - repos:/app/repos
-    - queue-data:/app/data
     networks:
     - app-network
 
@@ -25,4 +24,3 @@ networks:
 
 volumes:
   repos:
-  queue-data:
