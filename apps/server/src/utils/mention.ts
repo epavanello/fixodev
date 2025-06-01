@@ -16,7 +16,7 @@ export function isBotMentioned(body: string | null | undefined, sender: string) 
     sender.toLowerCase() !== `${envConfig.APP_NAME.toLowerCase()}[bot]`;
 
   if (result) {
-    logger.info({ sender }, 'Bot mentioned');
+    logger.info({ sender, body }, 'Bot mentioned');
   }
   return result;
 }

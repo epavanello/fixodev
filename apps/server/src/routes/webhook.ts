@@ -50,8 +50,11 @@ export async function processGitHubWebhookEvent(
     const octokit = await gitHubApp.getAuthenticatedClient(installationId);
 
     const instructions = isIssueCommentEvent(payload) ? payload.comment.body : payload.issue.body;
+    const senderLogin = isIssueCommentEvent(payload)
+      ? payload.sender.login
+      : payload.issue.user.login;
 
-    const shouldProcess = isBotMentioned(instructions, payload.sender.login);
+    const shouldProcess = isBotMentioned(instructions, senderLogin);
 
     if (shouldProcess) {
       const repoOwner = payload.repository.owner.login;
@@ -69,7 +72,7 @@ export async function processGitHubWebhookEvent(
           repoOwner,
           repoName,
           prNumber: payload.issue.number,
-          triggeredBy: payload.sender.login,
+          triggeredBy: senderLogin,
           installationId,
           repoUrl,
           instructions: instructions || undefined,
@@ -91,7 +94,7 @@ export async function processGitHubWebhookEvent(
           repoOwner,
           repoName,
           issueNumber: payload.issue.number,
-          triggeredBy: payload.sender.login,
+          triggeredBy: senderLogin,
           installationId,
           repoUrl,
           testJob,
