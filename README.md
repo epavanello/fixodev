@@ -173,6 +173,7 @@ graph TB
 - 📝 **Line-specific feedback** - Comment on specific code lines for targeted improvements
 - 🎯 **Code-level tagging** - Tag the bot on specific lines to generate targeted PRs
 - 💎 **Subscription system** - Premium access for private repos and advanced AI models
+- 💡 **Suggestion system** - Automatically suggests in case issues are opened not using fixodev, the suggestion must be a comment on the issue
 
 ### 🌟 **Future Vision** (v1.0+)
 
