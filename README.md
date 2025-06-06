@@ -152,7 +152,7 @@ graph TB
 
 ---
 
-## 🎯 Roadmap & Vision
+## 🎯 Roadmap & Changelog
 
 ### 🚀 **Current Status** (v0.1.0)
 
@@ -161,15 +161,18 @@ graph TB
 - ✅ Docker containerization
 - ✅ Automated PR creation
 
-### 🔮 **Coming Soon** (v0.2.0)
+### 🚀 **Current Status** (v0.2.0)
 
-- 🧵 **Full thread context** - Complete issue conversation awareness for better AI understanding
-- 🔄 **Iterative PR improvements** - Add comments to request changes and refinements
+- ✅ **Full thread context** - Complete issue conversation awareness for better AI understanding
+- ✅ **Iterative PR improvements** - Add comments to request changes and refinements
+- ✅ **AI reasoning transparency** - Show agent's thought process and considerations in PR discussions for debugging
+- ✅ **Usage tracking** - Display job costs and remaining free tier interactions
+
+### 🔮 **Coming Soon** (v0.3.0)
+
 - 📝 **Line-specific feedback** - Comment on specific code lines for targeted improvements
 - 🎯 **Code-level tagging** - Tag the bot on specific lines to generate targeted PRs
 - 💎 **Subscription system** - Premium access for private repos and advanced AI models
-- 🧠 **AI reasoning transparency** - Show agent's thought process and considerations in PR discussions for debugging
-- 💰 **Usage tracking** - Display job costs and remaining free tier interactions
 
 ### 🌟 **Future Vision** (v1.0+)
 
