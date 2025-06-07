@@ -13,6 +13,7 @@ _Transform your development workflow with instant, intelligent code improvements
 [![GitHub issues](https://img.shields.io/github/issues/epavanello/fixodev)](https://github.com/epavanello/fixodev/issues)
 [![GitHub pull requests](https://img.shields.io/github/issues-pr/epavanello/fixodev)](https://github.com/epavanello/fixodev/pulls)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-7289da)](https://discord.gg/jjKSatbfYM)
+[![dev.to](https://img.shields.io/badge/dev.to-Read%20Article-0A0A0A?logo=dev.to)](https://dev.to/epavanello/i-built-a-github-bot-that-fixes-your-code-for-you-and-heres-how-you-can-use-it-29ff)
 
 [📖 **Documentation**](docs/) • [💬 **Community**](https://discord.gg/jjKSatbfYM) • [🐛 **Report Bug**](https://github.com/epavanello/fixodev/issues)
 
@@ -90,7 +91,7 @@ _Watch FixO Dev Bot in action - from mention to pull request in minutes!_
 
 ### For Repository Owners
 
-1. **[Install the GitHub App](https://github.com/apps/fixo-dev)** on your repository _(required only for private repos)_
+1. **[Install the GitHub App](https://github.com/apps/fixodev-app)** on your repository _(required only for private repos)_
 2. **Configure** (optional) by adding `.fixodev.yml` to your repo root
 3. **Trigger** the bot by mentioning `@fixodev` in:
    - 💬 Issue comments
@@ -342,7 +343,7 @@ This project is licensed under the **Business Source License 1.1 (BSL-1.1)**.
 
 ### Ready to transform your development workflow?
 
-[![Install GitHub App](https://img.shields.io/badge/Install-GitHub%20App-2ea44f?style=for-the-badge&logo=github)](https://github.com/apps/fixo-dev)
+[![Install GitHub App](https://img.shields.io/badge/Install-GitHub%20App-2ea44f?style=for-the-badge&logo=github)](https://github.com/apps/fixodev-app)
 [![Join Discord](https://img.shields.io/badge/Join-Discord%20Community-7289da?style=for-the-badge&logo=discord)](https://discord.gg/jjKSatbfYM)
 [![Star on GitHub](https://img.shields.io/badge/Star-on%20GitHub-yellow?style=for-the-badge&logo=github)](https://github.com/epavanello/fixodev)
 

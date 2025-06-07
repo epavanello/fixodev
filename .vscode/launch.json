@@ -75,11 +75,7 @@
         "--test"
       ],
       "stopOnEntry": false,
-      "watchMode": false,
-      "env": {
-        "NODE_ENV": "development",
-        "BOT_USER_PAT": "your_github_pat_here"
-      }
+      "watchMode": false
     }
   ]
 }

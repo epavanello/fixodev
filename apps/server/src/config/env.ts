@@ -53,7 +53,8 @@ const envSchema = z.object({
     .transform(val => (val ? parseInt(val) : undefined)),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  DATABASE_AUTH_TOKEN: z.string().min(1, 'DATABASE_AUTH_TOKEN is required'),
+  DATABASE_AUTH_TOKEN: z.string().optional(),
+  DATABASE_DIALECT: z.union([z.literal('turso'), z.literal('sqlite')]).default('turso'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

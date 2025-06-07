@@ -1,6 +1,6 @@
 import { PrUpdateJob } from '../types/jobs';
 import { cloneRepository, cleanupRepository } from '../git/clone';
-import { checkoutBranch, commitChanges, pushChanges } from '../git/operations';
+import { commitChanges, pushChanges } from '../git/operations';
 import { buildPullRequestContext, getPullRequest } from '../github/pr';
 import { loadBotConfig } from '../utils/yaml';
 import { JobError } from '../utils/error';

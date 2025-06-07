@@ -35,3 +35,4 @@ data/
 
 *.local.*
 apps/server/debug-payloads/
+apps/server/local.db

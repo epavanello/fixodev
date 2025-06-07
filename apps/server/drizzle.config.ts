@@ -8,6 +8,7 @@ config({ path: path.resolve(process.cwd(), '../../.env') });
 const envSchema = z.object({
   DATABASE_URL: z.string(),
   DATABASE_AUTH_TOKEN: z.string(),
+  DATABASE_DIALECT: z.union([z.literal('turso'), z.literal('sqlite')]).default('turso'),
 });
 
 let envConfig: z.infer<typeof envSchema>;
@@ -21,7 +22,7 @@ try {
 }
 export default {
   schema: './src/db/schema.ts',
-  dialect: 'turso',
+  dialect: envConfig.DATABASE_DIALECT,
   dbCredentials: {
     url: envConfig.DATABASE_URL,
     authToken: envConfig.DATABASE_AUTH_TOKEN,

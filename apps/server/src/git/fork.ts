@@ -8,11 +8,12 @@ export interface ForkResult {
   forkOwner: string;
   forkRepoName: string;
   forkCloneUrl: string;
+  wasSynced?: boolean;
 }
 
 /**
  * Ensures a fork of the specified repository exists for the authenticated user/app,
- * creating it if necessary.
+ * creating it if necessary. If the fork already exists, it will be synchronized with upstream.
  *
  * @param octokit Authenticated Octokit instance.
  * @param originalRepoOwner The owner of the original repository.
@@ -29,6 +30,7 @@ export async function ensureForkExists(
   let forkOwner = desiredForkOwner;
   let forkRepoName = originalRepoName;
   let forkCloneUrl: string;
+  let wasSynced = false;
 
   const operationLogger = forkLogger.child({
     originalRepo: `${originalRepoOwner}/${originalRepoName}`,
@@ -47,9 +49,38 @@ export async function ensureForkExists(
   );
 
   if (forkCheckResult.ok) {
-    // Fork already exists
+    // Fork already exists, try to sync it with upstream
     forkCloneUrl = forkCheckResult.data.data.clone_url;
-    return { forkOwner, forkRepoName, forkCloneUrl };
+
+    const syncResult = await operationLogger.safe(
+      () =>
+        octokit.repos.mergeUpstream({
+          owner: forkOwner,
+          repo: forkRepoName,
+          branch: forkCheckResult.data.data.default_branch || 'main',
+        }),
+      'sync fork with upstream',
+      {
+        forkRepo: `${forkOwner}/${forkRepoName}`,
+        upstream: `${originalRepoOwner}/${originalRepoName}`,
+      },
+    );
+
+    if (syncResult.ok) {
+      wasSynced = true;
+      operationLogger.info('Fork successfully synced with upstream', {
+        mergeType: syncResult.data.data.merge_type,
+        baseBranch: syncResult.data.data.base_branch,
+      });
+    } else {
+      // Sync failed, log the error but continue - the fork still exists
+      operationLogger.warn('Failed to sync fork with upstream, continuing with existing fork', {
+        error: syncResult.error.message,
+        status: 'status' in syncResult.error ? syncResult.error.status : 'unknown',
+      });
+    }
+
+    return { forkOwner, forkRepoName, forkCloneUrl, wasSynced };
   }
 
   // Check if it's a 404 (fork doesn't exist) or another error
@@ -81,5 +112,5 @@ export async function ensureForkExists(
     { waitTimeMs: 5000, finalFork: `${forkOwner}/${forkRepoName}` },
   );
 
-  return { forkOwner, forkRepoName, forkCloneUrl };
+  return { forkOwner, forkRepoName, forkCloneUrl, wasSynced: true };
 }
