@@ -23,10 +23,10 @@
 	</div>
 	<!-- Placeholder for issue preview -->
 	<div class="bg-surface w-full max-w-lg space-y-4 rounded-2xl border border-gray-800 p-6">
-		<h3 class="text-xl font-semibold">Issue #123: Implement Dark Mode Toggle</h3>
+		<h3 class="text-xl font-semibold">Issue #42: Optimize Quantum Entanglement Algorithm</h3>
 		<p class="text-sm text-gray-400">opened by <span class="text-primary">@fixodev</span></p>
 		<p class="bg-background border-accent rounded-lg border-l-4 p-4 italic">
-			The website currently lacks a dark mode option. Implement a toggle button in the navigation bar that allows users to switch between light and dark themes. Ensure the preference is saved locally.
+			The current entanglement algorithm is O(n^3). Refactor for O(log n) complexity to prevent universe collapse.
 		</p>
 		<div class="text-right">
 			<span
