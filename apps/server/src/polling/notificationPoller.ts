@@ -3,7 +3,7 @@ import { Endpoints } from '@octokit/types'; // For precise API endpoint types
 import { jobQueue } from '../queue';
 import { envConfig } from '../config/env';
 import { logger as rootLogger } from '../config/logger';
-import { Issue } from '@octokit/webhooks-types';
+import { Issue, IssueComment } from '@octokit/webhooks-types';
 import { isBotMentioned } from '@/utils/mention';
 import { IssueToPrJob } from '@/types/jobs';
 
@@ -11,7 +11,7 @@ const POLLER_INTERVAL_MS = 60 * 1000; // 1 minute
 
 const logger = rootLogger.child({ service: 'NotificationPoller' });
 
-let lastSuccessfulPollTimestamp = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // Start 5 mins ago
+let lastSuccessfulPollTimestamp = new Date(Date.now() - 20 * 60 * 1000).toISOString(); // Start 5 mins ago
 let isPolling = false;
 
 export type GitHubNotificationArray = Endpoints['GET /notifications']['response']['data'];
@@ -50,6 +50,12 @@ export async function processGitHubNotifications(
       });
       const issue = issueResponse.data;
 
+      const commentResponse = await octokit.request<IssueComment>({
+        method: 'GET',
+        url: notification.subject.latest_comment_url,
+      });
+      const comment = commentResponse.data;
+
       if (!issue || !issue.number || isNaN(issue.number) || !issue.user?.login) {
         logger.error(
           { notificationId: notification.id, subjectUrl: notification.subject.url },
@@ -62,15 +68,35 @@ export async function processGitHubNotifications(
         continue;
       }
 
-      const shouldProcess = isBotMentioned(issue.body, issue.user.login);
+      // Check if bot is mentioned in issue body or comment
+      const isMentionedInIssue = isBotMentioned(issue.body, issue.user.login);
+      const isMentionedInComment = comment && isBotMentioned(comment.body, comment.user.login);
 
-      if (!shouldProcess) {
+      if (!isMentionedInIssue && !isMentionedInComment) {
         logger.info(
           { notificationId: notification.id, issueNumber: issue.number },
-          'Notification not processed: bot not mentioned in issue body.',
+          'Notification not processed: bot not mentioned in issue body or comment.',
         );
         await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
         continue;
+      }
+
+      // Determine the correct user login based on where the bot is mentioned
+      let triggeredBy: string;
+      if (isMentionedInComment && comment) {
+        // If mentioned in comment, use comment author
+        triggeredBy = comment.user.login;
+        logger.info(
+          { notificationId: notification.id, issueNumber: issue.number, triggeredBy },
+          'Bot mentioned in comment, using comment author as trigger.',
+        );
+      } else {
+        // If mentioned in issue body, use issue author
+        triggeredBy = issue.user.login;
+        logger.info(
+          { notificationId: notification.id, issueNumber: issue.number, triggeredBy },
+          'Bot mentioned in issue body, using issue author as trigger.',
+        );
       }
 
       const issueToPrJob: IssueToPrJob = {
@@ -80,7 +106,7 @@ export async function processGitHubNotifications(
         repoName: notification.repository.name,
         issueNumber: issue.number,
         issue: issue,
-        triggeredBy: issue.user.login,
+        triggeredBy: triggeredBy,
         repoUrl: notification.repository.html_url,
         testJob: testJob,
       };
