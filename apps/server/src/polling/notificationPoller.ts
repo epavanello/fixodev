@@ -5,13 +5,14 @@ import { envConfig } from '../config/env';
 import { logger as rootLogger } from '../config/logger';
 import { Issue, IssueComment } from '@octokit/webhooks-types';
 import { isBotMentioned } from '@/utils/mention';
-import { IssueToPrJob } from '@/types/jobs';
+import { IssueToPrJob, PrUpdateJob } from '@/types/jobs';
+import { getPullRequest } from '@/github/pr';
 
 const POLLER_INTERVAL_MS = 60 * 1000; // 1 minute
 
 const logger = rootLogger.child({ service: 'NotificationPoller' });
 
-let lastSuccessfulPollTimestamp = new Date(Date.now() - 20 * 60 * 1000).toISOString(); // Start 5 mins ago
+let lastSuccessfulPollTimestamp = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // Start 5 mins ago
 let isPolling = false;
 
 export type GitHubNotificationArray = Endpoints['GET /notifications']['response']['data'];
@@ -34,7 +35,7 @@ export async function processGitHubNotifications(
       if (
         notification.reason !== 'mention' ||
         !notification.subject ||
-        notification.subject.type !== 'Issue' || // Only process Issue mentions for now
+        (notification.subject.type !== 'Issue' && notification.subject.type !== 'PullRequest') ||
         !notification.repository ||
         notification.repository.private // Skip private repos (original logic)
       ) {
@@ -99,27 +100,63 @@ export async function processGitHubNotifications(
         );
       }
 
-      const issueToPrJob: IssueToPrJob = {
-        type: 'issue_to_pr',
-        id: `polled_mention_${notification.id}_${Date.now()}`,
-        repoOwner: notification.repository.owner.login,
-        repoName: notification.repository.name,
-        issueNumber: issue.number,
-        issue: issue,
-        triggeredBy: triggeredBy,
-        repoUrl: notification.repository.html_url,
-        testJob: testJob,
-      };
+      const isPullRequest = notification.subject.type === 'PullRequest';
 
-      await jobQueue.addJob(issueToPrJob);
-      logger.info(
-        {
-          jobId: issueToPrJob.id,
-          repo: notification.repository.full_name,
-          issue: issue.number,
-        },
-        'IssueToPrJob queued from notification.',
-      );
+      if (isPullRequest) {
+        const pr = await getPullRequest(
+          octokit,
+          notification.repository.owner.login,
+          notification.repository.name,
+          issue.number,
+        );
+
+        const instructions = isMentionedInComment && comment ? comment.body : issue.body;
+
+        const prUpdateJob: PrUpdateJob = {
+          type: 'pr_update',
+          id: `polled_mention_${notification.id}_${Date.now()}`,
+          pullRequest: pr,
+          repoOwner: notification.repository.owner.login,
+          repoName: notification.repository.name,
+          prNumber: issue.number,
+          triggeredBy: triggeredBy,
+          repoUrl: notification.repository.html_url,
+          instructions: instructions || undefined,
+          testJob: testJob,
+        };
+
+        await jobQueue.addJob(prUpdateJob);
+        logger.info(
+          {
+            jobId: prUpdateJob.id,
+            repo: notification.repository.full_name,
+            pr: issue.number,
+          },
+          'PrUpdateJob queued from notification.',
+        );
+      } else {
+        const issueToPrJob: IssueToPrJob = {
+          type: 'issue_to_pr',
+          id: `polled_mention_${notification.id}_${Date.now()}`,
+          repoOwner: notification.repository.owner.login,
+          repoName: notification.repository.name,
+          issueNumber: issue.number,
+          issue: issue,
+          triggeredBy: triggeredBy,
+          repoUrl: notification.repository.html_url,
+          testJob: testJob,
+        };
+
+        await jobQueue.addJob(issueToPrJob);
+        logger.info(
+          {
+            jobId: issueToPrJob.id,
+            repo: notification.repository.full_name,
+            issue: issue.number,
+          },
+          'IssueToPrJob queued from notification.',
+        );
+      }
       await octokit.activity.markThreadAsRead({ thread_id: parseInt(notification.id) });
       successCount++;
     } catch (error) {
